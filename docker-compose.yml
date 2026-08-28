@@ -1,0 +1,5 @@
+name: safeeatsnyc
+
+# Airflow services will be added during Phase 2,
+# Day 3: Orchestration setup.
+services: {}

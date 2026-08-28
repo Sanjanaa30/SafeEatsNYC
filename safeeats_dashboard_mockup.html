@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SafeEats NYC — Restaurant Safety Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --mint:#DFFBF0;
+    --sky:#DCEEFF;
+    --peach:#FFF1E0;
+    --ink:#0B1220;
+    --ink-soft:#4B5768;
+    --ink-faint:#8390A2;
+    --glass:rgba(255,255,255,0.56);
+    --glass-strong:rgba(255,255,255,0.78);
+    --glass-border:rgba(255,255,255,0.75);
+    --emerald:#0EAE7B;
+    --emerald-soft:#CFF3E4;
+    --amber:#E8930C;
+    --amber-soft:#FBE7C6;
+    --coral:#EF4D5E;
+    --coral-soft:#FCDBDF;
+    --azure:#1E8FD5;
+    --azure-soft:#D6ECFB;
+    --indigo:#6E5AE6;
+    --shadow: 0 8px 30px rgba(20, 30, 60, 0.10);
+    --shadow-lg: 0 20px 60px rgba(20, 30, 60, 0.16);
+    --radius: 20px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:'Manrope', sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    background:
+      radial-gradient(1100px 700px at 8% -10%, var(--mint) 0%, transparent 60%),
+      radial-gradient(1000px 700px at 100% 0%, var(--sky) 0%, transparent 55%),
+      radial-gradient(900px 600px at 40% 110%, var(--peach) 0%, transparent 55%),
+      #F6F9FC;
+    background-attachment: fixed;
+    overflow-x:hidden;
+  }
+  h1,h2,h3,h4{ font-family:'Sora', sans-serif; margin:0; letter-spacing:-0.02em;}
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  a{color:inherit;}
+  ::selection{ background: var(--emerald-soft); }
+  :focus-visible{ outline: 2.5px solid var(--indigo); outline-offset: 2px; border-radius: 8px;}
+
+  .blob{ position:fixed; border-radius:50%; filter: blur(70px); opacity:0.55; z-index:-1; }
+  .blob1{ width:420px;height:420px; background:var(--emerald-soft); top:-120px; left:-100px;}
+  .blob2{ width:380px;height:380px; background:var(--azure-soft); top:10%; right:-140px;}
+  .blob3{ width:340px;height:340px; background:var(--amber-soft); bottom:-120px; left:20%;}
+
+  header.topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:14px 28px;
+    background:var(--glass-strong);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border-bottom:1px solid var(--glass-border);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:38px;height:38px;border-radius:12px;
+    background: linear-gradient(135deg, var(--emerald), var(--azure));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: var(--shadow);
+  }
+  .brand-mark svg{ width:20px; height:20px; }
+  .brand-text h1{ font-size:17px; font-weight:700; }
+  .brand-text span{ font-size:11px; color:var(--ink-faint); font-weight:600; letter-spacing:0.04em; text-transform:uppercase;}
+
+  nav.tabs{ display:flex; gap:4px; background:rgba(255,255,255,0.5); padding:5px; border-radius:999px; border:1px solid var(--glass-border);}
+  nav.tabs button{
+    border:none; background:transparent; padding:9px 16px; border-radius:999px;
+    font-family:'Manrope'; font-weight:700; font-size:13px; color:var(--ink-soft);
+    cursor:pointer; transition: all .25s ease; white-space:nowrap;
+  }
+  nav.tabs button.active{ background:var(--ink); color:white; box-shadow: var(--shadow); }
+  nav.tabs button:hover:not(.active){ color:var(--ink); }
+
+  .demo-badge{
+    display:flex; align-items:center; gap:7px;
+    font-size:11px; font-weight:700; color:var(--ink-soft);
+    background:rgba(255,255,255,0.6); border:1px solid var(--glass-border);
+    padding:6px 12px; border-radius:999px;
+  }
+  .live-dot{ width:7px;height:7px;border-radius:50%; background:var(--emerald); box-shadow: 0 0 0 0 rgba(14,174,123,.6); animation: pulseDot 1.8s infinite;}
+  @keyframes pulseDot{ 0%{box-shadow:0 0 0 0 rgba(14,174,123,.5);} 70%{box-shadow:0 0 0 8px rgba(14,174,123,0);} 100%{box-shadow:0 0 0 0 rgba(14,174,123,0);} }
+
+  .skyline-wrap{ position:relative; height:60px; overflow:hidden; }
+  .skyline-wrap svg{ position:absolute; bottom:0; left:0; width:100%; height:100%; }
+
+  main{ max-width:1320px; margin:0 auto; padding:26px 24px 80px; }
+  .page{ display:none; animation: fadeUp .45s ease; }
+  .page.active{ display:block; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+  .page-head{ display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:22px; }
+  .page-head h2{ font-size:26px; font-weight:800; }
+  .page-head p{ margin:4px 0 0; color:var(--ink-soft); font-size:14px; max-width:640px;}
+  .eyebrow{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--azure); margin-bottom:4px; display:block;}
+
+  .card{
+    background:var(--glass);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border:1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding:20px;
+  }
+  .card:hover{ box-shadow: var(--shadow-lg); }
+
+  .filters{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:18px;}
+  .filters select, .filters input[type="text"]{
+    font-family:'Manrope'; font-weight:600; font-size:13px; color:var(--ink);
+    background:var(--glass-strong); border:1px solid var(--glass-border);
+    padding:10px 14px; border-radius:12px; cursor:pointer;
+    backdrop-filter: blur(10px);
+  }
+  .filters input[type="text"]{ cursor:text; min-width:220px; }
+  .filters .seg{ display:flex; background:var(--glass-strong); border:1px solid var(--glass-border); border-radius:12px; padding:3px; gap:2px;}
+  .filters .seg button{ border:none; background:transparent; padding:7px 13px; font-size:12.5px; font-weight:700; border-radius:9px; cursor:pointer; color:var(--ink-soft);}
+  .filters .seg button.active{ background:var(--ink); color:#fff;}
+  .filter-label{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); margin-right:-4px;}
+
+  .kpi-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:22px;}
+  @media(max-width:1100px){ .kpi-grid{ grid-template-columns:repeat(3,1fr);} }
+  @media(max-width:640px){ .kpi-grid{ grid-template-columns:repeat(2,1fr);} }
+  .kpi{ padding:16px 16px 14px; position:relative; overflow:hidden;}
+  .kpi .ic{ width:34px;height:34px;border-radius:10px; display:flex;align-items:center;justify-content:center; margin-bottom:10px;}
+  .kpi .val{ font-family:'Sora'; font-size:22px; font-weight:800; line-height:1;}
+  .kpi .lbl{ font-size:11.5px; color:var(--ink-soft); font-weight:700; margin-top:6px;}
+  .kpi .trend{ font-size:11px; font-weight:700; margin-top:8px; display:flex; align-items:center; gap:4px;}
+
+  .grid-2{ display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; margin-bottom:16px;}
+  @media(max-width:980px){ .grid-2{ grid-template-columns:1fr; } }
+  .grid-3{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px;}
+  @media(max-width:980px){ .grid-3{ grid-template-columns:repeat(2,1fr);} }
+  @media(max-width:560px){ .grid-3{ grid-template-columns:1fr;} }
+
+  .card h3{ font-size:15px; font-weight:700;}
+  .card .sub{ font-size:12px; color:var(--ink-faint); margin-top:2px; font-weight:600;}
+  .card-head{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:10px;}
+  .chip{ font-size:10.5px; font-weight:800; padding:4px 9px; border-radius:999px; letter-spacing:.02em;}
+  .chip.a{ background:var(--emerald-soft); color:#087050;}
+  .chip.b{ background:var(--amber-soft); color:#8a5a05;}
+  .chip.c{ background:var(--coral-soft); color:#a11f30;}
+  .chip.info{ background:var(--azure-soft); color:#0d5f96;}
+
+  .borough-card{ display:flex; flex-direction:column; gap:8px; }
+  .borough-card .rank{ font-family:'Sora'; font-weight:800; font-size:26px; }
+  .borough-card .rank span{ font-size:13px; font-weight:600; color:var(--ink-faint); margin-left:4px;}
+  .mini-bar{ height:6px; border-radius:6px; background:rgba(0,0,0,0.06); overflow:hidden; margin-top:6px;}
+  .mini-bar > div{ height:100%; border-radius:6px; }
+
+  canvas{ max-width:100%; }
+  .chart-box{ position:relative; height:280px; }
+  .chart-box.short{ height:220px;}
+
+  table.heatmap{ width:100%; border-collapse:separate; border-spacing:5px; font-size:12px;}
+  table.heatmap th{ font-weight:700; color:var(--ink-soft); text-align:center; padding:4px; font-size:11px;}
+  table.heatmap td{ text-align:center; padding:12px 6px; border-radius:10px; font-weight:800; color:#0b3a2c; font-family:'JetBrains Mono';}
+  table.heatmap td.rowlabel{ text-align:left; font-family:'Manrope'; font-weight:700; color:var(--ink); background:transparent !important;}
+
+  .map-wrap{ position:relative; }
+  .map-legend{ display:flex; gap:14px; flex-wrap:wrap; margin-top:12px;}
+  .map-legend .item{ display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:var(--ink-soft);}
+  .map-legend .dot{ width:10px;height:10px;border-radius:50%; }
+  .borough-blob{ opacity:0.9; transition: opacity .2s; }
+  .marker{ transform-origin:center; }
+  .marker circle.pulse{ animation: mapPulse 2.4s ease-out infinite; }
+  @keyframes mapPulse{ 0%{ opacity:.45; transform:scale(1);} 100%{ opacity:0; transform:scale(2.6);} }
+  .map-label{ font-family:'Sora'; font-weight:700; font-size:10.5px; fill:#0B1220; }
+
+  .rest-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  @media(max-width:1020px){ .rest-grid{ grid-template-columns:repeat(2,1fr);} }
+  @media(max-width:680px){ .rest-grid{ grid-template-columns:1fr;} }
+  .rest-card{ padding:16px; display:flex; flex-direction:column; gap:10px;}
+  .rest-card .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .rest-card h4{ font-size:14.5px; font-weight:700; line-height:1.25;}
+  .grade-badge{ width:38px;height:38px;border-radius:11px; display:flex;align-items:center;justify-content:center; font-family:'Sora'; font-weight:800; font-size:16px; flex-shrink:0;}
+  .rest-meta{ display:flex; flex-wrap:wrap; gap:6px; font-size:11px; }
+  .tag{ background:rgba(11,18,32,0.06); padding:3px 9px; border-radius:999px; font-weight:700; color:var(--ink-soft);}
+  .tag.warn{ background:var(--coral-soft); color:#a11f30; }
+  .sparkline{ display:flex; align-items:flex-end; gap:4px; height:30px; margin-top:2px;}
+  .sparkline div{ width:14px; border-radius:4px 4px 0 0; }
+  .rest-foot{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--ink-faint); font-weight:700; border-top:1px dashed rgba(0,0,0,.08); padding-top:9px;}
+
+  .improved-strip{ display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; }
+  .improved-pill{ flex:0 0 auto; display:flex; align-items:center; gap:8px; background:var(--emerald-soft); padding:9px 14px 9px 9px; border-radius:999px; font-size:12px; font-weight:700; color:#087050;}
+  .improved-pill .av{ width:26px;height:26px;border-radius:50%; background:var(--emerald); color:#fff; display:flex;align-items:center;justify-content:center; font-family:Sora; font-weight:800; font-size:11px;}
+
+  .gauge-wrap{ display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; }
+  .gauge-num{ position:absolute; top:56%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+  .gauge-num .n{ font-family:'Sora'; font-size:34px; font-weight:800; }
+  .gauge-num .s{ font-size:11px; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.05em;}
+  .status-pill{ margin-top:10px; padding:7px 16px; border-radius:999px; font-weight:800; font-size:12.5px; }
+
+  .factor-row{ display:flex; align-items:center; gap:10px; font-size:12.5px; font-weight:700; margin-bottom:10px;}
+  .factor-row .flabel{ width:150px; flex-shrink:0; color:var(--ink-soft);}
+  .factor-track{ flex:1; height:9px; background:rgba(0,0,0,0.06); border-radius:6px; overflow:hidden;}
+  .factor-track > div{ height:100%; border-radius:6px; background:linear-gradient(90deg, var(--azure), var(--indigo)); }
+  .factor-val{ width:34px; text-align:right; color:var(--ink-faint); font-family:'JetBrains Mono'; font-size:11px;}
+
+  table.risktable{ width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.risktable th{ text-align:left; padding:8px 10px; color:var(--ink-faint); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid rgba(0,0,0,.08); cursor:pointer; user-select:none;}
+  table.risktable th:hover{ color:var(--ink);}
+  table.risktable td{ padding:10px 10px; border-bottom:1px solid rgba(0,0,0,.05); font-weight:600;}
+  table.risktable tr:hover td{ background:rgba(255,255,255,0.4); }
+
+  footer{ text-align:center; padding:30px; font-size:11.5px; color:var(--ink-faint); font-weight:600;}
+
+  /* ---------- Clickable finder cards ---------- */
+  .rest-card{ cursor:pointer; transition: transform .18s ease, box-shadow .18s ease; }
+  .rest-card:hover{ transform:translateY(-3px); }
+  .chain-badge{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:800; color:var(--indigo); background:rgba(110,90,230,0.12); padding:3px 9px; border-radius:999px;}
+  .loc-dots{ display:flex; gap:6px; flex-wrap:wrap; }
+  .loc-dot{ width:26px;height:26px;border-radius:8px; display:flex;align-items:center;justify-content:center; font-family:'Sora'; font-weight:800; font-size:12px; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:200; display:none;
+    background:rgba(11,18,32,0.45); backdrop-filter: blur(6px);
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.open{ display:flex; animation: fadeIn .2s ease; }
+  @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+  .modal-panel{
+    width:100%; max-width:600px; max-height:86vh; overflow-y:auto;
+    background:var(--glass-strong); backdrop-filter: blur(22px) saturate(160%);
+    border:1px solid var(--glass-border); border-radius:22px; box-shadow:var(--shadow-lg);
+    padding:26px; animation: modalPop .25s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes modalPop{ from{ opacity:0; transform:scale(.94) translateY(8px);} to{ opacity:1; transform:scale(1) translateY(0);} }
+  .modal-close{
+    position:absolute; top:18px; right:18px; width:32px;height:32px;border-radius:10px;
+    background:rgba(11,18,32,0.06); border:none; cursor:pointer; display:flex;align-items:center;justify-content:center;
+    color:var(--ink-soft); font-size:16px;
+  }
+  .modal-close:hover{ background:rgba(11,18,32,0.12); }
+  .modal-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; padding-right:36px;}
+  .modal-head h3{ font-size:19px; font-weight:800; line-height:1.25;}
+  .modal-grade{ width:52px;height:52px;border-radius:14px; display:flex;align-items:center;justify-content:center; font-family:'Sora'; font-weight:800; font-size:22px; flex-shrink:0;}
+  .modal-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0;}
+  .modal-stat{ background:rgba(255,255,255,0.5); border-radius:14px; padding:12px; text-align:center;}
+  .modal-stat .n{ font-family:'Sora'; font-weight:800; font-size:17px;}
+  .modal-stat .l{ font-size:10px; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em; margin-top:3px;}
+  .modal-section-title{ font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); margin:18px 0 8px;}
+  .modal-hist{ display:flex; align-items:flex-end; gap:10px; height:70px; padding:0 4px;}
+  .modal-hist .yr{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1;}
+  .modal-hist .bar{ width:100%; border-radius:8px 8px 4px 4px; max-width:46px;}
+  .modal-hist .yl{ font-size:10px; color:var(--ink-faint); font-weight:700;}
+  .modal-violation{ display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:rgba(255,255,255,0.5); border-radius:12px; font-size:12.5px; font-weight:600; margin-bottom:7px;}
+  .modal-cta{ display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;}
+  .btn{ border:none; border-radius:12px; padding:11px 18px; font-family:'Manrope'; font-weight:700; font-size:13px; cursor:pointer; }
+  .btn-primary{ background:var(--ink); color:#fff; }
+  .btn-primary:hover{ background:#000; }
+  .btn-ghost{ background:rgba(11,18,32,0.06); color:var(--ink); }
+  .btn-ghost:hover{ background:rgba(11,18,32,0.1); }
+  .loc-row{ display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.5); border-radius:14px; margin-bottom:9px; cursor:pointer; transition:background .15s;}
+  .loc-row:hover{ background:rgba(255,255,255,0.85); }
+  .loc-row .info{ flex:1; }
+  .loc-row .info .n{ font-weight:700; font-size:13px;}
+  .loc-row .info .m{ font-size:11px; color:var(--ink-faint); font-weight:600; margin-top:2px;}
+  .back-link{ display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--azure); background:none; border:none; cursor:pointer; padding:0; margin-bottom:14px;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="blob blob1"></div>
+<div class="blob blob2"></div>
+<div class="blob blob3"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" fill="white" opacity=".9"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="brand-text">
+      <h1>SafeEats NYC</h1>
+      <span>Restaurant Safety Intelligence</span>
+    </div>
+  </div>
+  <nav class="tabs" id="tabNav">
+    <button data-page="overview" class="active">Overview</button>
+    <button data-page="correlation">Correlation</button>
+    <button data-page="finder">Finder</button>
+    <button data-page="risk">Predictive Risk</button>
+  </nav>
+  <div class="demo-badge"><span class="live-dot"></span> Live demo · sample data</div>
+</header>
+
+<div class="skyline-wrap">
+  <svg viewBox="0 0 1400 200" preserveAspectRatio="none">
+    <polygon points="0,200 0,140 40,140 40,110 80,110 80,150 130,150 130,90 160,90 160,150 210,150 210,120 260,120 260,160 300,160 300,70 330,70 330,160 380,160 380,130 420,130 420,170 470,170 470,100 500,100 500,60 520,60 520,100 550,100 550,170 610,170 610,120 650,120 650,150 700,150 700,80 730,80 730,150 780,150 780,110 820,110 820,160 870,160 870,90 900,90 900,50 925,50 925,90 950,90 950,160 1010,160 1010,130 1050,130 1050,170 1100,170 1100,100 1140,100 1140,150 1190,150 1190,120 1230,120 1230,160 1280,160 1280,90 1320,90 1320,150 1360,150 1360,170 1400,170 1400,200"
+      fill="#0B1220" opacity="0.06"/>
+  </svg>
+</div>
+
+<main>
+
+  <section class="page active" id="page-overview">
+    <div class="page-head">
+      <div>
+        <span class="eyebrow">Citywide · Live</span>
+        <h2>City &amp; Borough Safety Overview</h2>
+        <p>How clean is NYC right now — and which boroughs, cuisines, and violations are driving the numbers.</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="filters">
+      <span class="filter-label">Borough</span>
+      <select id="ov-borough">
+        <option value="all">All boroughs</option>
+        <option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option>
+      </select>
+      <span class="filter-label">Sort boroughs by</span>
+      <select id="ov-sort">
+        <option value="rank">Safety rank</option>
+        <option value="gradeA">% Grade A</option>
+        <option value="complaintRate">311 rate</option>
+        <option value="improvement">Improvement rate</option>
+        <option value="total">Total restaurants</option>
+        <option value="name">Name (A–Z)</option>
+      </select>
+    </div>
+
+    <div class="grid-3" id="boroughCards"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div><h3>Grade Distribution by Borough</h3><div class="sub">Share of restaurants at each letter grade</div></div>
+          <span class="chip info">100% stacked</span>
+        </div>
+        <div class="chart-box"><canvas id="chartStacked"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div><h3>Cleanest Cuisines by Borough</h3><div class="sub">% Grade A, darker = cleaner</div></div>
+          <select id="heat-sort" style="font-family:'Manrope'; font-weight:600; font-size:12px; background:var(--glass-strong); border:1px solid var(--glass-border); padding:6px 10px; border-radius:10px; cursor:pointer;">
+            <option value="rank">Sort: Safety rank</option>
+            <option value="avg">Sort: Avg % Grade A</option>
+            <option value="name">Sort: Name (A–Z)</option>
+          </select>
+        </div>
+        <div id="heatmapHolder"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Most Common Violations</h3><div class="sub">Per 100 restaurants · critical vs. non-critical</div></div>
+        <div class="filters" style="margin:0;">
+          <select id="ov-violation-borough">
+            <option value="Citywide">Citywide</option>
+            <option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option>
+          </select>
+          <div class="seg" id="ov-violation-sort">
+            <button data-sort="freq" class="active">Frequency</button>
+            <button data-sort="critical">Critical first</button>
+            <button data-sort="az">A–Z</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="chartViolations"></canvas></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-correlation">
+    <div class="page-head">
+      <div>
+        <span class="eyebrow">Operational · Deep dive</span>
+        <h2>Violations &amp; 311 Correlation</h2>
+        <p>Do citizen complaints predict inspection failures? Weekly trend and geospatial overlap.</p>
+      </div>
+    </div>
+
+    <div class="filters">
+      <span class="filter-label">Borough</span>
+      <select id="cor-borough">
+        <option value="all">All boroughs</option>
+        <option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option>
+      </select>
+      <span class="filter-label">Range</span>
+      <div class="seg" id="cor-range">
+        <button data-range="8" class="active">8 weeks</button>
+        <button data-range="12">12 weeks</button>
+        <button data-range="26">26 weeks</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div><h3>Weekly 311 Complaints vs. Critical Violations</h3><div class="sub">Dual-axis · auto-refreshing</div></div>
+          <span class="chip info"><span class="live-dot" style="background:#0d5f96;"></span> live</span>
+        </div>
+        <div class="chart-box"><canvas id="chartCorr"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div><h3>Correlation Snapshot</h3><div class="sub">Complaints → failures, 2-week lag</div></div>
+        </div>
+        <div style="text-align:center; padding:10px 0 4px;">
+          <div class="mono" style="font-family:Sora; font-size:44px; font-weight:800; color:var(--azure);" id="corrCoef">0.64</div>
+          <div style="font-size:12px; color:var(--ink-soft); font-weight:700; margin-top:2px;">Pearson correlation coefficient</div>
+        </div>
+        <div style="background:rgba(255,255,255,.5); border-radius:14px; padding:14px; margin-top:14px; font-size:12.5px; color:var(--ink-soft); line-height:1.5;">
+          Weeks with a spike in rodent/food-safety 311 complaints show a moderate-to-strong relationship with critical violations logged in the following two weeks — strongest in <b id="corrBoro" style="color:var(--ink);">the Bronx</b>.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Geospatial Overlap Map</h3><div class="sub">Marker size = intensity by borough</div></div>
+        <div class="seg" id="map-metric">
+          <button data-metric="complaints" class="active">Complaints</button>
+          <button data-metric="failures">Failed Inspections</button>
+          <button data-metric="overlap">Overlap</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <svg viewBox="0 0 400 380" style="width:100%; height:340px;" id="nycMap"></svg>
+      </div>
+      <div class="map-legend">
+        <div class="item"><span class="dot" style="background:var(--azure);"></span> 311 Complaints</div>
+        <div class="item"><span class="dot" style="background:var(--coral);"></span> Failed Inspections</div>
+        <div class="item"><span class="dot" style="background:var(--indigo);"></span> Overlap zone</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Borough Ranking</h3><div class="sub">Click a column to sort</div></div>
+      </div>
+      <table class="risktable" id="corTable">
+        <thead><tr>
+          <th data-key="name">Borough</th>
+          <th data-key="complaints">311 Complaints</th>
+          <th data-key="failures">Failed Inspections</th>
+          <th data-key="overlap">Overlap</th>
+        </tr></thead>
+        <tbody id="corTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="page" id="page-finder">
+    <div class="page-head">
+      <div>
+        <span class="eyebrow">Customer lookup</span>
+        <h2>SafeEats Restaurant Finder</h2>
+        <p>Search any NYC restaurant's current grade, history, and safety flags.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-head">
+        <div><h3>Recently Improved to Grade A</h3><div class="sub">Bounced back from B/C on reinspection</div></div>
+      </div>
+      <div class="improved-strip" id="improvedStrip"></div>
+    </div>
+
+    <div class="seg" id="finder-subtab" style="margin-bottom:18px; display:inline-flex;">
+      <button data-sub="independent" class="active">Independent Restaurants</button>
+      <button data-sub="chains">Fast Food Chains</button>
+    </div>
+
+    <div id="finder-independent">
+      <div class="filters">
+        <input type="text" id="f-search" placeholder="Search by name or ZIP...">
+        <select id="f-borough"><option value="all">All boroughs</option><option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option></select>
+        <select id="f-cuisine"><option value="all">All cuisines</option></select>
+        <select id="f-grade"><option value="all">Any grade</option><option value="A">Grade A</option><option value="B">Grade B</option><option value="C">Grade C</option></select>
+        <select id="f-flag">
+          <option value="all">Any flag</option>
+          <option value="critical">Repeat critical only</option>
+          <option value="improved">Recently improved only</option>
+        </select>
+        <span class="filter-label">Sort</span>
+        <select id="f-sort">
+          <option value="name">Name (A–Z)</option>
+          <option value="grade">Grade (A → C)</option>
+          <option value="risk">Risk (high → low)</option>
+          <option value="score">Score (best first)</option>
+          <option value="days">Days since inspection</option>
+          <option value="cuisine">Cuisine (A–Z)</option>
+          <option value="borough">Borough (A–Z)</option>
+        </select>
+      </div>
+      <div class="rest-grid" id="restGrid"></div>
+    </div>
+
+    <div id="finder-chains" style="display:none;">
+      <div class="filters">
+        <input type="text" id="c-search" placeholder="Search chain name...">
+        <select id="c-borough"><option value="all">All boroughs</option><option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option></select>
+        <select id="c-cuisine"><option value="all">All cuisines</option></select>
+        <select id="c-flag">
+          <option value="all">Any flag</option>
+          <option value="critical">Has repeat-critical location</option>
+        </select>
+        <span class="filter-label">Sort</span>
+        <select id="c-sort">
+          <option value="name">Chain name (A–Z)</option>
+          <option value="locations">Most locations</option>
+          <option value="worstgrade">Worst grade first</option>
+          <option value="risk">Avg. risk (high → low)</option>
+        </select>
+      </div>
+      <div class="rest-grid" id="chainGrid"></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-risk">
+    <div class="page-head">
+      <div>
+        <span class="eyebrow">AI / ML · Predictive</span>
+        <h2>Predictive Risk &amp; Consumer Insights</h2>
+        <p>Probability of a restaurant's next inspection landing at grade B or C.</p>
+      </div>
+    </div>
+
+    <div class="filters">
+      <span class="filter-label">Restaurant</span>
+      <select id="risk-select"></select>
+      <span class="filter-label">Filter risk list by borough</span>
+      <select id="risk-borough"><option value="all">All boroughs</option><option>Manhattan</option><option>Brooklyn</option><option>Queens</option><option>Bronx</option><option>Staten Island</option></select>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><div><h3 id="riskRestName">—</h3><div class="sub" id="riskRestMeta">—</div></div></div>
+        <div class="gauge-wrap">
+          <div class="chart-box short" style="width:280px; margin:0 auto;"><canvas id="chartGauge"></canvas></div>
+          <div class="gauge-num"><div class="n" id="gaugeNum">—</div><div class="s">risk score</div></div>
+          <div class="status-pill" id="statusPill">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div><h3>Top Driving Factors</h3><div class="sub">Feature importance for this prediction</div></div>
+          <div class="seg" id="factor-sort-dir">
+            <button data-dir="desc" class="active">Highest impact</button>
+            <button data-dir="asc">Lowest impact</button>
+          </div>
+        </div>
+        <div id="factorList" style="margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Citywide Top-Risk Restaurants</h3><div class="sub">Click a column to sort · highest predicted probability of B/C on next inspection</div></div>
+        <div class="seg" id="risk-sort-dir">
+          <button data-dir="desc" class="active">Highest first</button>
+          <button data-dir="asc">Lowest first</button>
+        </div>
+      </div>
+      <table class="risktable" id="riskTable">
+        <thead><tr><th data-key="name">Restaurant</th><th data-key="borough">Borough</th><th data-key="cuisine">Cuisine</th><th data-key="risk">Risk</th><th data-key="level">Status</th></tr></thead>
+        <tbody id="riskTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-panel" id="modalPanel" role="dialog" aria-modal="true">
+    <button class="modal-close" id="modalCloseBtn" aria-label="Close">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<footer>SafeEats NYC — demo dashboard built on sample data · design mockup, not a live production pipeline</footer>
+
+<script>
+Chart.defaults.font.family = "'Manrope', sans-serif";
+Chart.defaults.color = '#4B5768';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.boxWidth = 8;
+
+const COLORS = { emerald:'#0EAE7B', amber:'#E8930C', coral:'#EF4D5E', azure:'#1E8FD5', indigo:'#6E5AE6', ink:'#0B1220' };
+
+const boroughs = [
+  { name:'Staten Island', gradeA:94, gradeB:5, gradeC:1, total:920,  rank:1, topIssue:'Improper Cold Holding', complaintRate:9.4,  improvement:66 },
+  { name:'Brooklyn',      gradeA:91, gradeB:7, gradeC:2, total:7610, rank:2, topIssue:'Mice / Rodent Activity', complaintRate:12.1, improvement:59 },
+  { name:'Manhattan',     gradeA:88, gradeB:9, gradeC:3, total:9840, rank:3, topIssue:'Improper Cold Holding', complaintRate:14.6, improvement:62 },
+  { name:'Queens',        gradeA:85, gradeB:11,gradeC:4, total:6210, rank:4, topIssue:'Improper Food Storage Temp', complaintRate:16.8, improvement:55 },
+  { name:'Bronx',         gradeA:79, gradeB:14,gradeC:7, total:2440, rank:5, topIssue:'Pest Activity — Roaches', complaintRate:22.7, improvement:47 },
+];
+
+const cuisines = ['Italian','Chinese','Mexican','Pizza','Indian','Caribbean'];
+const heat = {
+  'Staten Island':[96,90,93,97,88,95], 'Brooklyn':[92,88,90,94,85,91],
+  'Manhattan':[89,84,86,90,80,87], 'Queens':[86,80,83,88,79,84], 'Bronx':[80,74,77,82,72,78]
+};
+
+const violationsByBorough = {
+  Citywide:[ ['Improper Cold Holding',18.2,true],['Mice/Rodent Activity',15.4,true],['Improper Food Storage Temp',13.1,true],['Pest Activity — Roaches',11.8,true],['Wiping Cloths Not Stored Properly',9.6,false],['Facility Not Vermin Proof',8.3,true],['No Handwashing Sign Posted',6.1,false] ],
+  Manhattan:[ ['Improper Cold Holding',20.1,true],['Wiping Cloths Not Stored Properly',12.4,false],['Mice/Rodent Activity',11.2,true],['Improper Food Storage Temp',10.8,true],['No Handwashing Sign Posted',7.9,false],['Facility Not Vermin Proof',7.1,true],['Pest Activity — Roaches',6.5,true] ],
+  Brooklyn:[ ['Mice/Rodent Activity',16.7,true],['Improper Cold Holding',15.9,true],['Pest Activity — Roaches',10.4,true],['Improper Food Storage Temp',9.8,true],['Facility Not Vermin Proof',8.6,true],['Wiping Cloths Not Stored Properly',7.2,false],['No Handwashing Sign Posted',5.4,false] ],
+  Queens:[ ['Improper Food Storage Temp',17.5,true],['Improper Cold Holding',15.1,true],['Mice/Rodent Activity',13.6,true],['Pest Activity — Roaches',12.0,true],['Facility Not Vermin Proof',9.1,true],['Wiping Cloths Not Stored Properly',6.8,false],['No Handwashing Sign Posted',5.0,false] ],
+  Bronx:[ ['Pest Activity — Roaches',24.3,true],['Mice/Rodent Activity',21.6,true],['Improper Cold Holding',18.9,true],['Facility Not Vermin Proof',15.2,true],['Improper Food Storage Temp',14.0,true],['Wiping Cloths Not Stored Properly',8.1,false],['No Handwashing Sign Posted',6.7,false] ],
+  'Staten Island':[ ['Improper Cold Holding',10.2,true],['Wiping Cloths Not Stored Properly',7.4,false],['Mice/Rodent Activity',6.8,true],['No Handwashing Sign Posted',5.1,false],['Improper Food Storage Temp',4.9,true],['Facility Not Vermin Proof',4.0,true],['Pest Activity — Roaches',3.2,true] ],
+};
+
+function genWeekly(n){
+  const weeks=[]; let c=60, v=40;
+  for(let i=0;i<n;i++){
+    c += Math.round((Math.random()-0.4)*14); c=Math.max(30,Math.min(110,c));
+    v = Math.round(v*0.7 + c*0.35 + (Math.random()-0.5)*8); v=Math.max(15,Math.min(90,v));
+    weeks.push({label:'W'+(i+1), complaints:c, critical:v});
+  }
+  return weeks;
+}
+let weeklyData = genWeekly(26);
+
+const restNames = ['Mott St. Dumpling House','Delancey Noodle Bar','Fulton Fish House','Astoria Grill Co.','Grand Concourse Diner','Jackson Ave. Taqueria','Flatbush Jerk Kitchen','Arthur Ave. Trattoria','Ridgewood Curry Pot','Bay Street Bistro','Canal Street Wok','Harlem Soul Table','Sunset Park Pupuseria','Bushwick Pizza Lab','Corona Plaza Tacos','Yankee Stadium Grill','Whitehall Sushi Room','Woodside Sari-Sari Grill','St. George Chowder Co.','Inwood Empanada House','Chelsea Market Deli','Rockaway Beach Shack','Elmhurst Dim Sum','Tremont Ave. Bakery'];
+const restCuisines = ['Chinese','Italian','Seafood','American','Diner','Mexican','Caribbean','Italian','Indian','American','Chinese','American','Latin','Pizza','Mexican','American','Japanese','Filipino','Seafood','Latin','Deli','Seafood','Chinese','Bakery'];
+const restBoroughs = ['Manhattan','Manhattan','Manhattan','Queens','Bronx','Queens','Brooklyn','Bronx','Queens','Staten Island','Manhattan','Manhattan','Brooklyn','Brooklyn','Queens','Bronx','Manhattan','Queens','Staten Island','Manhattan','Manhattan','Queens','Queens','Bronx'];
+
+function makeHistory(finalGrade){
+  const grades=['A','B','C']; let h=[];
+  for(let y=0;y<3;y++){ h.push(grades[Math.floor(Math.random()*(finalGrade==='A'?1.4:3))] || 'A'); }
+  h[2]=finalGrade; return h;
+}
+
+let __idCounter = 0;
+function makeRestaurant({ name, cuisine, borough, address=null, chain=null, zipSeed=null }){
+  const i = __idCounter++;
+  const grade = Math.random()<0.72?'A':(Math.random()<0.7?'B':'C');
+  const score = grade==='A'?Math.round(Math.random()*13):grade==='B'?14+Math.round(Math.random()*13):28+Math.round(Math.random()*20);
+  const days = Math.round(Math.random()*300)+2;
+  const critical = grade!=='A' && Math.random()<0.55;
+  const history = makeHistory(grade);
+  const improved = history[1]!=='A' && grade==='A' && Math.random()<0.6;
+  const risk = grade==='A'? Math.round(Math.random()*30) : grade==='B'? 35+Math.round(Math.random()*30): 60+Math.round(Math.random()*38);
+  const factors = [
+    {f:'Prior critical violations', v:Math.round(20+Math.random()*70)},
+    {f:'Days since last inspection', v:Math.round(15+Math.random()*70)},
+    {f:'Cuisine risk profile', v:Math.round(10+Math.random()*60)},
+    {f:'Borough baseline risk', v:Math.round(10+Math.random()*55)},
+    {f:'Recent score trend', v:Math.round(10+Math.random()*65)},
+  ].sort((a,b)=>b.v-a.v);
+  return { id:i, name, cuisine, borough, address, chain, grade, score, days, critical, history, improved, risk, factors,
+    level: risk>=60?'High':risk>=35?'Moderate':'Low', zip: 10001 + ((zipSeed!==null?zipSeed:i)*137)%900 };
+}
+
+const restaurants = restNames.map((name,i)=> makeRestaurant({ name, cuisine:restCuisines[i], borough:restBoroughs[i], zipSeed:i }) );
+
+/* ---- Fast food chains: same chain name, multiple independently-inspected locations ---- */
+const chainDefs = [
+  { chain:'Boro Burger Co.', cuisine:'Fast Food', locations:[
+      {borough:'Manhattan', address:'Herald Square'}, {borough:'Brooklyn', address:'Fulton Mall'},
+      {borough:'Queens', address:'Jackson Heights'}, {borough:'Bronx', address:'Fordham Rd'} ] },
+  { chain:'Slice Express Pizza', cuisine:'Fast Food', locations:[
+      {borough:'Manhattan', address:'Union Square'}, {borough:'Queens', address:'Astoria Blvd'},
+      {borough:'Staten Island', address:'St. George Terminal'} ] },
+  { chain:'Metro Chicken Shack', cuisine:'Fast Food', locations:[
+      {borough:'Brooklyn', address:'Downtown Brooklyn'}, {borough:'Bronx', address:'Grand Concourse'},
+      {borough:'Manhattan', address:'Times Square'} ] },
+  { chain:'NYC Bagel Works', cuisine:'Fast Food', locations:[
+      {borough:'Manhattan', address:'Upper East Side'}, {borough:'Queens', address:'Forest Hills'},
+      {borough:'Brooklyn', address:'Park Slope'} ] },
+];
+chainDefs.forEach(cd=>{
+  cd.locations.forEach((loc,li)=>{
+    const r = makeRestaurant({ name:`${cd.chain} — ${loc.address}`, cuisine:cd.cuisine, borough:loc.borough, address:loc.address, chain:cd.chain, zipSeed: restaurants.length+li*11 });
+    restaurants.push(r);
+  });
+});
+if(!restCuisines.includes('Fast Food')) restCuisines.push('Fast Food');
+
+document.querySelectorAll('#tabNav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#tabNav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+btn.dataset.page).classList.add('active');
+  });
+});
+
+const kpis = [
+  {lbl:'Total Active Restaurants', val:27014, fmt:v=>v.toLocaleString(), color:COLORS.azure, trend:'+1.2% MoM', up:true},
+  {lbl:'Grade A Compliance Rate', val:87.6, fmt:v=>v.toFixed(1)+'%', color:COLORS.emerald, trend:'+0.8pt', up:true},
+  {lbl:'Avg Inspection Score', val:11.4, fmt:v=>v.toFixed(1)+' pts', color:COLORS.indigo, trend:'-0.3pt (better)', up:true},
+  {lbl:'Critical Violation Rate', val:17.8, fmt:v=>v.toFixed(1)+'/100', color:COLORS.coral, trend:'+0.6/100', up:false},
+  {lbl:'Open 311 Food Complaints', val:1284, fmt:v=>v.toLocaleString(), color:COLORS.amber, trend:'-4.1% WoW', up:true},
+  {lbl:'Temp. Closures (YTD)', val:96, fmt:v=>v, color:COLORS.coral, trend:'+3 this month', up:false},
+];
+const kpiGrid = document.getElementById('kpiGrid');
+kpis.forEach(k=>{
+  const div=document.createElement('div');
+  div.className='card kpi';
+  div.innerHTML = `<div class="ic" style="background:${k.color}22;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="${k.color}" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    </div>
+    <div class="val" data-target="${k.val}">0</div>
+    <div class="lbl">${k.lbl}</div>
+    <div class="trend" style="color:${k.up?COLORS.emerald:COLORS.coral};">${k.up?'▲':'▼'} ${k.trend}</div>`;
+  kpiGrid.appendChild(div);
+});
+function animateCounters(){
+  document.querySelectorAll('.kpi .val').forEach(el=>{
+    const target=parseFloat(el.dataset.target);
+    let cur=0; const step = target/40;
+    const orig = kpis.find(k=>k.val===target);
+    const iv = setInterval(()=>{
+      cur+=step; if(cur>=target){cur=target; clearInterval(iv);}
+      el.textContent = orig ? orig.fmt(cur) : Math.round(cur);
+    },18);
+  });
+}
+animateCounters();
+
+function renderBoroughCards(){
+  const sortKey = document.getElementById('ov-sort').value;
+  const filterVal = document.getElementById('ov-borough').value;
+  let list = boroughs.filter(b=> filterVal==='all' || b.name===filterVal);
+  const sorters = {
+    rank:(a,b)=>a.rank-b.rank, gradeA:(a,b)=>b.gradeA-a.gradeA, complaintRate:(a,b)=>b.complaintRate-a.complaintRate,
+    improvement:(a,b)=>b.improvement-a.improvement, total:(a,b)=>b.total-a.total, name:(a,b)=>a.name.localeCompare(b.name)
+  };
+  list = [...list].sort(sorters[sortKey]);
+  const holder = document.getElementById('boroughCards'); holder.innerHTML='';
+  list.forEach(b=>{
+    const color = b.rank<=2?COLORS.emerald:b.rank===3?COLORS.azure:b.rank===4?COLORS.amber:COLORS.coral;
+    const div=document.createElement('div'); div.className='card borough-card';
+    div.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h3>${b.name}</h3>
+          <div class="sub">${b.total.toLocaleString()} restaurants</div>
+        </div>
+        <span class="chip" style="background:${color}22; color:${color};">#${b.rank} in NYC</span>
+      </div>
+      <div class="rank">${b.gradeA}%<span>Grade A</span></div>
+      <div class="mini-bar"><div style="width:${b.gradeA}%; background:${color};"></div></div>
+      <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-soft); font-weight:700; margin-top:4px;">
+        <span>Top issue: ${b.topIssue}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-faint); font-weight:700;">
+        <span>311 rate: ${b.complaintRate}/1k</span><span>Improved: ${b.improvement}%</span>
+      </div>`;
+    holder.appendChild(div);
+  });
+}
+document.getElementById('ov-borough').addEventListener('change', ()=>{ renderBoroughCards(); renderViolationsChart(); });
+document.getElementById('ov-sort').addEventListener('change', renderBoroughCards);
+renderBoroughCards();
+
+const ctxStacked = document.getElementById('chartStacked');
+const stackedChart = new Chart(ctxStacked,{
+  type:'bar',
+  data:{ labels:boroughs.map(b=>b.name),
+    datasets:[
+      {label:'Grade A', data:boroughs.map(b=>b.gradeA), backgroundColor:COLORS.emerald, borderRadius:6, stack:'s'},
+      {label:'Grade B', data:boroughs.map(b=>b.gradeB), backgroundColor:COLORS.amber, borderRadius:6, stack:'s'},
+      {label:'Grade C', data:boroughs.map(b=>b.gradeC), backgroundColor:COLORS.coral, borderRadius:6, stack:'s'},
+    ]},
+  options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{position:'bottom'}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.x}%`}} },
+    scales:{ x:{ stacked:true, max:100, grid:{color:'rgba(0,0,0,0.05)'}, ticks:{callback:v=>v+'%'} }, y:{ stacked:true, grid:{display:false} } }
+  }
+});
+
+function renderHeatmap(){
+  const sortKey = document.getElementById('heat-sort').value;
+  const avgOf = name => heat[name].reduce((s,v)=>s+v,0)/heat[name].length;
+  let rows = [...boroughs];
+  if(sortKey==='rank') rows.sort((a,b)=>a.rank-b.rank);
+  else if(sortKey==='avg') rows.sort((a,b)=> avgOf(b.name)-avgOf(a.name));
+  else rows.sort((a,b)=> a.name.localeCompare(b.name));
+
+  const holder = document.getElementById('heatmapHolder');
+  let html = '<table class="heatmap"><thead><tr><th></th>' + cuisines.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+  rows.forEach(b=>{
+    html += `<tr><td class="rowlabel">${b.name}</td>`;
+    heat[b.name].forEach(v=>{
+      const alpha = 0.15 + (v-70)/30*0.65;
+      html += `<td style="background:rgba(14,174,123,${Math.max(0.12,Math.min(0.85,alpha))});">${v}%</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  holder.innerHTML = html;
+}
+document.getElementById('heat-sort').addEventListener('change', renderHeatmap);
+renderHeatmap();
+
+let violationsChart, violSortMode='freq';
+function renderViolationsChart(){
+  const boro = document.getElementById('ov-violation-borough').value;
+  let data = [...violationsByBorough[boro]];
+  if(violSortMode==='freq') data.sort((a,b)=>b[1]-a[1]);
+  else if(violSortMode==='critical') data.sort((a,b)=> (b[2]-a[2]) || (b[1]-a[1]));
+  else data.sort((a,b)=> a[0].localeCompare(b[0]));
+  const ctx = document.getElementById('chartViolations');
+  if(violationsChart) violationsChart.destroy();
+  violationsChart = new Chart(ctx,{
+    type:'bar',
+    data:{ labels:data.map(d=>d[0]),
+      datasets:[{ label:'Per 100 restaurants', data:data.map(d=>d[1]),
+        backgroundColor:data.map(d=>d[2]?COLORS.coral:COLORS.azure), borderRadius:8 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.parsed.x} per 100 · ${data[c.dataIndex][2]?'Critical':'Non-critical'}`}} },
+      scales:{ x:{ grid:{color:'rgba(0,0,0,0.05)'} }, y:{ grid:{display:false} } } }
+  });
+}
+document.getElementById('ov-violation-borough').addEventListener('change', renderViolationsChart);
+document.querySelectorAll('#ov-violation-sort button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('#ov-violation-sort button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  violSortMode = b.dataset.sort; renderViolationsChart();
+}));
+renderViolationsChart();
+
+let corrChart;
+function renderCorrChart(){
+  const range = parseInt(document.querySelector('#cor-range button.active').dataset.range);
+  const slice = weeklyData.slice(-range);
+  const ctx = document.getElementById('chartCorr');
+  if(corrChart) corrChart.destroy();
+  corrChart = new Chart(ctx,{
+    type:'line',
+    data:{ labels:slice.map(w=>w.label),
+      datasets:[
+        {label:'311 Complaints', data:slice.map(w=>w.complaints), borderColor:COLORS.azure, backgroundColor:COLORS.azure+'22', fill:true, tension:.4, yAxisID:'y', pointRadius:2},
+        {label:'Critical Violations', data:slice.map(w=>w.critical), borderColor:COLORS.coral, backgroundColor:COLORS.coral+'22', fill:true, tension:.4, yAxisID:'y1', pointRadius:2},
+      ]},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{position:'bottom'} },
+      scales:{ y:{ position:'left', grid:{color:'rgba(0,0,0,0.05)'}, title:{display:true, text:'Complaints', font:{size:10}} },
+                y1:{ position:'right', grid:{display:false}, title:{display:true, text:'Critical Violations', font:{size:10}} } }
+    }
+  });
+}
+document.querySelectorAll('#cor-range button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('#cor-range button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderCorrChart();
+}));
+document.getElementById('cor-borough').addEventListener('change', (e)=>{
+  document.getElementById('corrBoro').textContent = e.target.value==='all'?'the Bronx':'the '+e.target.value;
+  document.getElementById('corrCoef').textContent = (0.5+Math.random()*0.3).toFixed(2);
+});
+renderCorrChart();
+setInterval(()=>{
+  weeklyData.push({label:'W'+(weeklyData.length+1), complaints: Math.max(30,Math.min(110, weeklyData[weeklyData.length-1].complaints + Math.round((Math.random()-0.5)*12))), critical: Math.max(15,Math.min(90, weeklyData[weeklyData.length-1].critical + Math.round((Math.random()-0.5)*10)))});
+  renderCorrChart();
+},6000);
+
+const boroughShapes = {
+  Bronx:          { cx:230, cy:70,  rx:55, ry:42 },
+  Manhattan:      { cx:175, cy:170, rx:30, ry:80 },
+  Queens:         { cx:300, cy:180, rx:75, ry:65 },
+  Brooklyn:       { cx:250, cy:290, rx:70, ry:55 },
+  'Staten Island':{ cx:95,  cy:320, rx:55, ry:45 },
+};
+const mapMetrics = {
+  complaints:{ Bronx:38, Manhattan:30, Queens:34, Brooklyn:26, 'Staten Island':14, color:COLORS.azure },
+  failures:{ Bronx:34, Manhattan:22, Queens:26, Brooklyn:20, 'Staten Island':9, color:COLORS.coral },
+  overlap:{ Bronx:30, Manhattan:16, Queens:20, Brooklyn:15, 'Staten Island':6, color:COLORS.indigo },
+};
+function renderMap(){
+  const metricKey = document.querySelector('#map-metric button.active').dataset.metric;
+  const metric = mapMetrics[metricKey];
+  const svg = document.getElementById('nycMap');
+  let html='';
+  Object.entries(boroughShapes).forEach(([name,s])=>{
+    html += `<ellipse class="borough-blob" cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" fill="rgba(30,143,213,0.10)" stroke="rgba(11,18,32,0.18)" stroke-width="1.2"/>`;
+    html += `<text class="map-label" x="${s.cx}" y="${s.cy - s.ry - 8}" text-anchor="middle">${name}</text>`;
+    const r = 8 + metric[name]*0.9;
+    html += `<g class="marker">
+        <circle class="pulse" cx="${s.cx}" cy="${s.cy}" r="${r}" fill="${metric.color}" opacity="0.35"/>
+        <circle cx="${s.cx}" cy="${s.cy}" r="${Math.max(10,r*0.42)}" fill="${metric.color}" opacity="0.85"/>
+        <text x="${s.cx}" y="${s.cy+4}" text-anchor="middle" fill="#fff" font-family="JetBrains Mono" font-size="10" font-weight="700">${metric[name]}</text>
+      </g>`;
+  });
+  svg.innerHTML = html;
+}
+document.querySelectorAll('#map-metric button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('#map-metric button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderMap();
+}));
+renderMap();
+
+let corSortKey='complaints', corSortDir='desc';
+function renderCorTable(){
+  const rows = Object.keys(boroughShapes).map(n=>({
+    name:n, complaints:mapMetrics.complaints[n], failures:mapMetrics.failures[n], overlap:mapMetrics.overlap[n]
+  }));
+  rows.sort((a,b)=>{
+    if(corSortKey==='name') return corSortDir==='asc'? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+    return corSortDir==='asc'? a[corSortKey]-b[corSortKey] : b[corSortKey]-a[corSortKey];
+  });
+  const body = document.getElementById('corTableBody'); body.innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${r.name}</td><td>${r.complaints}</td><td>${r.failures}</td><td>${r.overlap}</td>`;
+    body.appendChild(tr);
+  });
+  document.querySelectorAll('#corTable th').forEach(th=>{
+    th.textContent = th.textContent.replace(/ [▲▼]$/,'') + (th.dataset.key===corSortKey ? (corSortDir==='asc'?' ▲':' ▼') : '');
+  });
+}
+document.querySelectorAll('#corTable th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    if(corSortKey===key) corSortDir = corSortDir==='asc'?'desc':'asc'; else { corSortKey=key; corSortDir = key==='name'?'asc':'desc'; }
+    renderCorTable();
+  });
+});
+renderCorTable();
+
+const independentRestaurants = restaurants.filter(r=>!r.chain);
+const chainNames = [...new Set(restaurants.filter(r=>r.chain).map(r=>r.chain))];
+
+const cuisineSelect = document.getElementById('f-cuisine');
+[...new Set(independentRestaurants.map(r=>r.cuisine))].sort().forEach(c=>{ const o=document.createElement('option'); o.textContent=c; cuisineSelect.appendChild(o); });
+
+const chainCuisineSelect = document.getElementById('c-cuisine');
+[...new Set(chainDefs.map(cd=>cd.cuisine))].sort().forEach(c=>{ const o=document.createElement('option'); o.textContent=c; chainCuisineSelect.appendChild(o); });
+
+function gradeColor(g){ return g==='A'?COLORS.emerald:g==='B'?COLORS.amber:COLORS.coral; }
+function gradeSoft(g){ return g==='A'?'var(--emerald-soft)':g==='B'?'var(--amber-soft)':'var(--coral-soft)'; }
+
+function renderImprovedStrip(){
+  const holder = document.getElementById('improvedStrip'); holder.innerHTML='';
+  restaurants.filter(r=>r.improved).forEach(r=>{
+    const el=document.createElement('div'); el.className='improved-pill'; el.tabIndex=0; el.setAttribute('role','button');
+    el.innerHTML = `<span class="av">${r.name.split(' ').map(w=>w[0]).slice(0,2).join('').slice(0,2)}</span> ${r.name} · B/C → A`;
+    el.addEventListener('click', ()=> openSingleModal(r.id));
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter') openSingleModal(r.id); });
+    holder.appendChild(el);
+  });
+  if(!holder.children.length) holder.innerHTML = '<span style="font-size:12px;color:var(--ink-faint);">No recent upgrades match current filters.</span>';
+}
+renderImprovedStrip();
+
+/* ---- Sub-tab toggle: Independent Restaurants vs. Fast Food Chains ---- */
+document.querySelectorAll('#finder-subtab button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#finder-subtab button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const showChains = btn.dataset.sub==='chains';
+    document.getElementById('finder-independent').style.display = showChains? 'none':'block';
+    document.getElementById('finder-chains').style.display = showChains? 'block':'none';
+  });
+});
+
+/* ---- Independent restaurants grid ---- */
+const GRADE_RANK = {A:0,B:1,C:2};
+function renderFinder(){
+  const search = document.getElementById('f-search').value.toLowerCase();
+  const boro = document.getElementById('f-borough').value;
+  const cuisine = document.getElementById('f-cuisine').value;
+  const grade = document.getElementById('f-grade').value;
+  const flag = document.getElementById('f-flag').value;
+  const sort = document.getElementById('f-sort').value;
+
+  let list = independentRestaurants.filter(r=>{
+    if(boro!=='all' && r.borough!==boro) return false;
+    if(cuisine!=='all' && r.cuisine!==cuisine) return false;
+    if(grade!=='all' && r.grade!==grade) return false;
+    if(flag==='critical' && !r.critical) return false;
+    if(flag==='improved' && !r.improved) return false;
+    return r.name.toLowerCase().includes(search) || String(r.zip).includes(search);
+  });
+
+  const sorters = {
+    name:(a,b)=>a.name.localeCompare(b.name), grade:(a,b)=>GRADE_RANK[a.grade]-GRADE_RANK[b.grade],
+    risk:(a,b)=>b.risk-a.risk, score:(a,b)=>a.score-b.score, days:(a,b)=>b.days-a.days,
+    cuisine:(a,b)=>a.cuisine.localeCompare(b.cuisine), borough:(a,b)=>a.borough.localeCompare(b.borough),
+  };
+  list = [...list].sort(sorters[sort]);
+
+  const grid = document.getElementById('restGrid'); grid.innerHTML='';
+  if(!list.length){ grid.innerHTML = '<div class="card" style="grid-column:1/-1; text-align:center; color:var(--ink-faint);">No restaurants match these filters.</div>'; return; }
+
+  list.forEach(r=>{
+    const spark = r.history.map(g=> g==='A'?26:g==='B'?17:9);
+    const div = document.createElement('div'); div.className='card rest-card'; div.tabIndex=0; div.setAttribute('role','button');
+    div.innerHTML = `
+      <div class="top">
+        <div>
+          <h4>${r.name}</h4>
+          <div class="rest-meta">
+            <span class="tag">${r.cuisine}</span><span class="tag">${r.borough}</span><span class="tag">ZIP ${r.zip}</span>
+            ${r.critical?'<span class="tag warn">⚠ Repeat critical</span>':''}
+          </div>
+        </div>
+        <div class="grade-badge" style="background:${gradeSoft(r.grade)}; color:${gradeColor(r.grade)};">${r.grade}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--ink-faint); font-weight:700; margin-bottom:4px;">3-year grade trend</div>
+        <div class="sparkline">
+          ${r.history.map((g,i)=>`<div style="height:${spark[i]}px; background:${gradeColor(g)};" title="Year ${i+1}: ${g}"></div>`).join('')}
+        </div>
+      </div>
+      <div class="rest-foot">
+        <span>Score: ${r.score} pts</span><span>${r.days}d since inspection</span>
+      </div>`;
+    div.addEventListener('click', ()=> openSingleModal(r.id));
+    div.addEventListener('keydown', e=>{ if(e.key==='Enter') openSingleModal(r.id); });
+    grid.appendChild(div);
+  });
+}
+['f-search','f-borough','f-cuisine','f-grade','f-flag','f-sort'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderFinder);
+  document.getElementById(id).addEventListener('change', renderFinder);
+});
+renderFinder();
+
+/* ---- Fast food chains grid: one card per chain, aggregated across its locations ---- */
+function renderChainsPanel(){
+  const search = document.getElementById('c-search').value.toLowerCase();
+  const boro = document.getElementById('c-borough').value;
+  const cuisine = document.getElementById('c-cuisine').value;
+  const flag = document.getElementById('c-flag').value;
+  const sort = document.getElementById('c-sort').value;
+
+  let chainCards = chainNames.map(name=>{
+    const locs = restaurants.filter(r=>r.chain===name);
+    return { name, cuisine: locs[0].cuisine, locations: locs,
+      hasCritical: locs.some(l=>l.critical),
+      avgRisk: locs.reduce((s,l)=>s+l.risk,0)/locs.length,
+      worstGrade: Math.max(...locs.map(l=>GRADE_RANK[l.grade])),
+      boroughsPresent: [...new Set(locs.map(l=>l.borough))] };
+  });
+
+  chainCards = chainCards.filter(c=>{
+    if(boro!=='all' && !c.boroughsPresent.includes(boro)) return false;
+    if(cuisine!=='all' && c.cuisine!==cuisine) return false;
+    if(flag==='critical' && !c.hasCritical) return false;
+    return c.name.toLowerCase().includes(search);
+  });
+
+  const sorters = {
+    name:(a,b)=>a.name.localeCompare(b.name),
+    locations:(a,b)=>b.locations.length-a.locations.length,
+    worstgrade:(a,b)=>b.worstGrade-a.worstGrade,
+    risk:(a,b)=>b.avgRisk-a.avgRisk,
+  };
+  chainCards.sort(sorters[sort]);
+
+  const grid = document.getElementById('chainGrid'); grid.innerHTML='';
+  if(!chainCards.length){ grid.innerHTML = '<div class="card" style="grid-column:1/-1; text-align:center; color:var(--ink-faint);">No chains match these filters.</div>'; return; }
+
+  chainCards.forEach(c=>{
+    const best = c.locations.slice().sort((a,b)=> GRADE_RANK[a.grade]-GRADE_RANK[b.grade])[0];
+    const div = document.createElement('div'); div.className='card rest-card'; div.tabIndex=0; div.setAttribute('role','button');
+    div.innerHTML = `
+      <div class="top">
+        <div>
+          <h4>${c.name}</h4>
+          <div class="rest-meta">
+            <span class="chain-badge">🔗 Chain</span><span class="tag">${c.cuisine}</span>
+            <span class="tag">${c.locations.length} locations</span>
+            ${c.hasCritical?'<span class="tag warn">⚠ Repeat critical somewhere</span>':''}
+          </div>
+        </div>
+        <div class="grade-badge" style="background:${gradeSoft(best.grade)}; color:${gradeColor(best.grade)};">${best.grade}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--ink-faint); font-weight:700; margin-bottom:6px;">Grade by location</div>
+        <div class="loc-dots">
+          ${c.locations.map(l=>`<div class="loc-dot" style="background:${gradeSoft(l.grade)}; color:${gradeColor(l.grade)};" title="${l.borough} · ${l.address} · Grade ${l.grade}">${l.grade}</div>`).join('')}
+        </div>
+      </div>
+      <div class="rest-foot">
+        <span>${c.boroughsPresent.length} boroughs</span><span>Avg. risk: ${Math.round(c.avgRisk)}%</span>
+      </div>`;
+    div.addEventListener('click', ()=> openChainModal(c.name));
+    div.addEventListener('keydown', e=>{ if(e.key==='Enter') openChainModal(c.name); });
+    grid.appendChild(div);
+  });
+}
+['c-search','c-borough','c-cuisine','c-flag','c-sort'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderChainsPanel);
+  document.getElementById(id).addEventListener('change', renderChainsPanel);
+});
+renderChainsPanel();
+
+/* ================= MODAL ================= */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalBody = document.getElementById('modalBody');
+
+function closeModal(){ modalOverlay.classList.remove('open'); }
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', e=>{ if(e.target===modalOverlay) closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+function openModal(){ modalOverlay.classList.add('open'); modalBody.scrollTop=0; }
+
+function singleModalHTML(r, opts={}){
+  const hist = r.history.map(g=> g==='A'?54:g==='B'?34:18);
+  const violSource = violationsByBorough[r.borough] || violationsByBorough.Citywide;
+  const sampleViolations = violSource.slice(0,2);
+  return `
+    ${opts.backTo? `<button class="back-link" onclick="reopenChainModal('${opts.backTo.replace(/'/g,"\\'")}')">← Back to all ${opts.backTo} locations</button>`:''}
+    <div class="modal-head">
+      <div>
+        <h3>${r.name}</h3>
+        <div class="rest-meta" style="margin-top:8px;">
+          <span class="tag">${r.cuisine}</span><span class="tag">${r.borough}</span><span class="tag">ZIP ${r.zip}</span>
+          ${r.address?`<span class="tag">${r.address}</span>`:''}
+          ${r.critical?'<span class="tag warn">⚠ Repeat critical violations</span>':''}
+        </div>
+      </div>
+      <div class="modal-grade" style="background:${gradeSoft(r.grade)}; color:${gradeColor(r.grade)};">${r.grade}</div>
+    </div>
+    <div class="modal-stats">
+      <div class="modal-stat"><div class="n">${r.score}</div><div class="l">Score (pts)</div></div>
+      <div class="modal-stat"><div class="n">${r.days}d</div><div class="l">Since inspection</div></div>
+      <div class="modal-stat"><div class="n">${r.risk}%</div><div class="l">B/C risk</div></div>
+    </div>
+    <div class="modal-section-title">3-Year Grade History</div>
+    <div class="modal-hist">
+      ${r.history.map((g,i)=>`<div class="yr"><div class="bar" style="height:${hist[i]}px; background:${gradeColor(g)};"></div><div class="yl">${g} · Yr ${i+1}</div></div>`).join('')}
+    </div>
+    <div class="modal-section-title">Recent Violation Types Logged Nearby</div>
+    ${sampleViolations.map(v=>`<div class="modal-violation"><span>${v[0]}</span><span class="chip ${v[2]?'c':'info'}">${v[2]?'Critical':'Non-critical'}</span></div>`).join('')}
+    <div class="modal-cta">
+      <button class="btn btn-primary" onclick="goToRisk(${r.id})">View full risk analysis →</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>`;
+}
+
+function openSingleModal(id){
+  const r = restaurants.find(x=>x.id===id);
+  modalBody.innerHTML = singleModalHTML(r, r.chain? {backTo:r.chain} : {});
+  openModal();
+}
+window.openSingleModal = openSingleModal;
+
+function openChainModal(chainName){
+  const locs = restaurants.filter(r=>r.chain===chainName);
+  modalBody.innerHTML = `
+    <div class="modal-head">
+      <div>
+        <h3>${chainName}</h3>
+        <div class="rest-meta" style="margin-top:8px;">
+          <span class="chain-badge">🔗 Chain</span><span class="tag">${locs[0].cuisine}</span><span class="tag">${locs.length} NYC locations</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-section-title">Each location is inspected and graded independently</div>
+    ${locs.map(l=>`
+      <div class="loc-row" onclick="openSingleModal(${l.id})">
+        <div class="grade-badge" style="width:34px;height:34px;font-size:13px; background:${gradeSoft(l.grade)}; color:${gradeColor(l.grade)};">${l.grade}</div>
+        <div class="info">
+          <div class="n">${l.borough} — ${l.address}</div>
+          <div class="m">Score ${l.score} pts · ${l.days}d since inspection ${l.critical?'· ⚠ repeat critical':''}</div>
+        </div>
+      </div>`).join('')}
+    <div class="modal-cta"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
+  openModal();
+}
+window.openChainModal = openChainModal;
+window.reopenChainModal = openChainModal;
+
+function goToRisk(id){
+  closeModal();
+  document.querySelector('#tabNav button[data-page="risk"]').click();
+  const r = restaurants.find(x=>x.id===id);
+  document.getElementById('risk-select').value = id;
+  renderGauge(r);
+}
+window.goToRisk = goToRisk;
+window.closeModal = closeModal;
+
+const riskSelect = document.getElementById('risk-select');
+restaurants.forEach(r=>{ const o=document.createElement('option'); o.value=r.id; o.textContent=r.name; riskSelect.appendChild(o); });
+
+let gaugeChart, currentRiskRestaurant, factorSortDir='desc';
+function renderGauge(r){
+  currentRiskRestaurant = r;
+  document.getElementById('riskRestName').textContent = r.name;
+  document.getElementById('riskRestMeta').textContent = `${r.cuisine} · ${r.borough} · Currently Grade ${r.grade}`;
+  document.getElementById('gaugeNum').textContent = r.risk + '%';
+  const pill = document.getElementById('statusPill');
+  const color = r.level==='High'?COLORS.coral:r.level==='Moderate'?COLORS.amber:COLORS.emerald;
+  pill.textContent = r.level+' Risk';
+  pill.style.background = color+'22'; pill.style.color = color;
+
+  const ctx = document.getElementById('chartGauge');
+  if(gaugeChart) gaugeChart.destroy();
+  gaugeChart = new Chart(ctx,{
+    type:'doughnut',
+    data:{ datasets:[{ data:[r.risk, 100-r.risk], backgroundColor:[color,'rgba(11,18,32,0.06)'], borderWidth:0 }]},
+    options:{ rotation:-90, circumference:180, cutout:'78%', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{enabled:false} } }
+  });
+  renderFactorList();
+}
+function renderFactorList(){
+  if(!currentRiskRestaurant) return;
+  const factors = [...currentRiskRestaurant.factors].sort((a,b)=> factorSortDir==='desc'? b.v-a.v : a.v-b.v);
+  const factorHolder = document.getElementById('factorList'); factorHolder.innerHTML='';
+  factors.forEach(f=>{
+    const row=document.createElement('div'); row.className='factor-row';
+    row.innerHTML = `<div class="flabel">${f.f}</div><div class="factor-track"><div style="width:${f.v}%;"></div></div><div class="factor-val">${f.v}%</div>`;
+    factorHolder.appendChild(row);
+  });
+}
+document.querySelectorAll('#factor-sort-dir button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('#factor-sort-dir button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  factorSortDir = b.dataset.dir; renderFactorList();
+}));
+riskSelect.addEventListener('change', ()=> renderGauge(restaurants[parseInt(riskSelect.value)]));
+renderGauge(restaurants[0]);
+
+let riskSortDir = 'desc', riskSortKey = 'risk';
+const RISK_LEVEL_RANK = {High:0, Moderate:1, Low:2};
+function renderRiskTable(){
+  const boro = document.getElementById('risk-borough').value;
+  let list = restaurants.filter(r=> boro==='all'||r.borough===boro);
+  const sorters = {
+    name:(a,b)=>a.name.localeCompare(b.name), borough:(a,b)=>a.borough.localeCompare(b.borough),
+    cuisine:(a,b)=>a.cuisine.localeCompare(b.cuisine), risk:(a,b)=>a.risk-b.risk,
+    level:(a,b)=>RISK_LEVEL_RANK[b.level]-RISK_LEVEL_RANK[a.level]
+  };
+  list = [...list].sort(sorters[riskSortKey]);
+  if(riskSortDir==='desc') list.reverse();
+  list = list.slice(0,8);
+  const body = document.getElementById('riskTableBody'); body.innerHTML='';
+  list.forEach(r=>{
+    const color = r.level==='High'?COLORS.coral:r.level==='Moderate'?COLORS.amber:COLORS.emerald;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${r.name}</td><td>${r.borough}</td><td>${r.cuisine}</td>
+      <td><b style="color:${color};">${r.risk}%</b></td>
+      <td><span class="chip" style="background:${color}22; color:${color};">${r.level}</span></td>`;
+    body.appendChild(tr);
+  });
+  document.querySelectorAll('#riskTable th').forEach(th=>{
+    th.textContent = th.textContent.replace(/ [▲▼]$/,'') + (th.dataset.key===riskSortKey ? (riskSortDir==='asc'?' ▲':' ▼') : '');
+  });
+}
+document.getElementById('risk-borough').addEventListener('change', renderRiskTable);
+document.querySelectorAll('#risk-sort-dir button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('#risk-sort-dir button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  riskSortDir = b.dataset.dir; renderRiskTable();
+}));
+document.querySelectorAll('#riskTable th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    riskSortKey = key; renderRiskTable();
+  });
+});
+renderRiskTable();
+</script>
+</body>
+</html>
