@@ -1,0 +1,10 @@
+brand_name_normalized,action,reason
+BASKIN ROBBINS,INCLUDE,Counter-service dessert chain included in QSR scope
+CARVEL,INCLUDE,Counter-service dessert chain included in QSR scope
+STARBUCKS,INCLUDE,Counter-service beverage chain included in QSR scope
+BOOST MOBILE,EXCLUDE,Telecommunications retailer incorrectly tagged as fast food
+BREITLING,EXCLUDE,Watch retailer incorrectly tagged as fast food
+COSTCO,EXCLUDE,Wholesale retailer rather than a restaurant brand
+CHINA WOK,EXCLUDE,Generic restaurant name without reliable chain identity
+JACKS,EXCLUDE,Ambiguous generic name without reliable NYC chain identity
+T MOBILE,EXCLUDE,Telecommunications retailer incorrectly tagged as fast food
