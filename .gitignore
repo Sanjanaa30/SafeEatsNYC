@@ -26,6 +26,7 @@ data/raw/
 data/bronze/
 data/silver/
 data/gold/
+data/audit/
 *.parquet
 
 # Airflow-generated files

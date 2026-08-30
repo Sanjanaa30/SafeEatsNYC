@@ -25,7 +25,9 @@ from name_normalization import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_DIRECTORY = PROJECT_ROOT / "data" / "reference"
-REPORT_PATH = PROJECT_ROOT / "docs" / "restaurant_name_profile.md"
+REPORT_PATH = (
+    PROJECT_ROOT / "docs" / "project_documents" / "restaurant_name_profile.md"
+)
 REVIEW_PATH = PROJECT_ROOT / "docs" / "co_brand_review_queue.csv"
 ALIAS_REVIEW_PATH = PROJECT_ROOT / "docs" / "brand_alias_review_queue.csv"
 DOHMH_API_URL = "https://data.cityofnewyork.us/resource/43nn-pn8j.json"

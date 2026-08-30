@@ -1,6 +1,7 @@
 boto3
+botocore[crt]
 pandas
 python-dotenv
 pytest
-requests
+requests>=2.32,<3
 geopandas

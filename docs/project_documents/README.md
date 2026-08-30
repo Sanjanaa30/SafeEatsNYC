@@ -1,8 +1,9 @@
 # Static reference data
 
-These files support maps, neighborhood labels, and fast-food brand
-confirmation. They are downloaded manually and do not pass through the
-Bronze, Silver, or daily Airflow pipeline.
+This document describes the files stored under `data/reference/`. Those files
+support maps, neighborhood labels, and fast-food brand confirmation. They are
+downloaded manually and do not pass through the Bronze, Silver, or daily
+Airflow pipeline.
 
 ## Files
 

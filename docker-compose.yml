@@ -1,5 +1,194 @@
+# This file sets up and manages your entire Apache Airflow orchestration environment inside containers using Docker.
+# It builds a multi-container local data center for your safeeatsnyc project, configuring the database, task queue, scheduler, web server, and all your custom ingestion paths automatically.
+
 name: safeeatsnyc
 
-# Airflow services will be added during Phase 2,
-# Day 3: Orchestration setup.
-services: {}
+x-airflow-common: &airflow-common
+  build:  # Tells Docker to build custom Airflow images using your project's Dockerfile.
+    context: .  # The build context is the root of the project.
+    dockerfile: airflow/Dockerfile  # Specifies the Dockerfile to use for building the Airflow image.
+    args:  # Arguments passed to the Dockerfile during build.
+      AIRFLOW_VERSION: ${AIRFLOW_VERSION:-3.3.1}  # Specifies the Airflow version to use, defaulting to 3.3.1 if not set in the environment.
+  environment: &airflow-common-environment # environment: Sets up all the core configurations, database connections (postgres), task brokers (redis), security tokens, and your custom environment variables (like project roots, page sizes, lookback days, and NYC Open Data tokens).
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor # Specifies the executor to use for running tasks. CeleryExecutor allows Airflow to distribute tasks across multiple workers.
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager # Specifies the authentication manager to use for Airflow. FabAuthManager is the default FAB-based authentication manager.
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true" # Pauses DAGs at creation to allow for initial configuration before they are activated.
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false" # Disables loading of example DAGs to keep the environment clean.
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/ # Specifies the URL for the Airflow Execution API server.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the database connection string for Airflow's metadata database.
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the result backend for Celery tasks, using the same PostgreSQL database as Airflow's metadata.
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0 # Specifies the Redis broker URL for Celery task messages.
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-safeeats_local_development_only} # Specifies the JWT secret for API authentication.
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true" # Enables health checks for the Airflow scheduler.
+    PYTHONPATH: /opt/safeeats # Specifies the Python path for the Airflow environment, allowing access to custom modules and scripts.
+    AWS_PROFILE: ${AWS_PROFILE:-safeeats-dev} # Selects the AWS profile already configured on the host computer.
+    AWS_REGION: ${AWS_REGION:-us-east-1} # Selects the AWS region containing the SafeEats S3 bucket.
+    AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1} # Makes the same region available to AWS tools that read this variable name.
+    AWS_CONFIG_FILE: /home/airflow/.aws/config # Points boto3 to the mounted AWS profile configuration.
+    AWS_SHARED_CREDENTIALS_FILE: /home/airflow/.aws/credentials # Points boto3 to mounted shared credentials when the profile uses them.
+    SAFEEATS_PROJECT_ROOT: /opt/safeeats # Specifies the root directory for the SafeEats project within the Airflow environment.
+    SAFEEATS_STORAGE_BACKEND: ${SAFEEATS_STORAGE_BACKEND:-s3} # Uses Amazon S3 as the Bronze storage backend.
+    SAFEEATS_S3_BUCKET: ${SAFEEATS_S3_BUCKET:?Set SAFEEATS_S3_BUCKET in .env} # Specifies the private S3 bucket receiving Bronze JSON.
+    SAFEEATS_S3_PREFIX: ${SAFEEATS_S3_PREFIX:-bronze} # Places all raw objects under the bronze prefix.
+    SAFEEATS_BRONZE_ROOT: ${SAFEEATS_BRONZE_ROOT:-/opt/safeeats/data/bronze} # Specifies the root directory for the bronze layer of the data lake within the SafeEats project.
+    SAFEEATS_AUDIT_DB: ${SAFEEATS_AUDIT_DB:-/opt/safeeats/data/audit/ingestion_audit.db} # Specifies the path to the ingestion audit database within the SafeEats project.
+    SAFEEATS_INGESTION_PAGE_SIZE: ${SAFEEATS_INGESTION_PAGE_SIZE:-10000} # Specifies the page size for ingestion tasks within the SafeEats project.
+    SAFEEATS_OVERLAP_DAYS: ${SAFEEATS_OVERLAP_DAYS:-2} # Specifies the number of days to overlap data during ingestion within the SafeEats project.
+    SAFEEATS_INITIAL_LOOKBACK_DAYS: ${SAFEEATS_INITIAL_LOOKBACK_DAYS:-1095} # Specifies the initial lookback period in days for data ingestion within the SafeEats project.
+    NYC_OPEN_DATA_APP_TOKEN: ${NYC_OPEN_DATA_APP_TOKEN:-} # Specifies the API token for accessing NYC Open Data within the SafeEats project.
+  volumes: # Specifies the volumes to mount into the Airflow container, including DAGs, logs, config, plugins, and the SafeEats project directory.
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/config:/opt/airflow/config
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./:/opt/safeeats # Mounts the current directory into the Airflow container at /opt/safeeats, allowing access to the SafeEats project files.
+    - type: bind # Gives local Airflow access to the existing AWS login profile without copying credentials into the image.
+      source: ${USERPROFILE}/.aws
+      target: /home/airflow/.aws
+      read_only: true
+    - type: bind # Lets the AWS login provider refresh only its temporary login token cache.
+      source: ${USERPROFILE}/.aws/login/cache
+      target: /home/airflow/.aws/login/cache
+  user: "${AIRFLOW_UID:-50000}:0" # Specifies the user and group ID to run the Airflow container, ensuring proper permissions for files and directories.
+  depends_on: &airflow-common-depends-on # Specifies the dependencies for the Airflow common service, ensuring that required services are healthy before starting.
+    postgres: # Dependency on the PostgreSQL service, ensuring it is healthy before starting the Airflow common service.
+      condition: service_healthy
+    redis: # Dependency on the Redis service, ensuring it is healthy before starting the Airflow common service.
+      condition: service_healthy
+
+services: # Defines the services for the Docker Compose setup, including Airflow common, PostgreSQL, and Redis.
+  postgres: # PostgreSQL service for storing Airflow metadata.
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  redis: # Redis service for caching and task result storage in Airflow.
+    image: redis:7.2-bookworm
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  airflow-apiserver: # Airflow API server service for handling API requests.
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-scheduler: # Airflow scheduler service for scheduling and executing DAG tasks.
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-dag-processor: # Airflow DAG processor service for processing DAG files.
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-worker: # Airflow worker service for executing tasks in a distributed manner.
+    <<: *airflow-common
+    command: celery worker
+    environment:
+      <<: *airflow-common-environment
+      DUMB_INIT_SETSID: "0"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-environment
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+    user: "0:0"
+
+  airflow-cli:
+    <<: *airflow-common
+    profiles: [debug]
+    command: ["bash", "-c", "airflow"]
+    depends_on:
+      <<: *airflow-common-depends-on
+
+volumes:
+  airflow-postgres:
+
+
+# This is the end of the Docker Compose configuration for the Airflow setup.

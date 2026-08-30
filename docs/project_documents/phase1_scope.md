@@ -6,6 +6,154 @@ SafeEats NYC combines NYC restaurant inspections and relevant 311 complaints
 to support restaurant safety lookup, borough comparisons, complaint/inspection
 analysis, and one predictive B/C-grade risk model.
 
+## What Phase 1 did
+
+Phase 1 prepared and studied the data before building the production pipeline.
+It completed these tasks in order:
+
+1. Confirmed that Python, Docker, and the project folders were usable.
+2. Downloaded small samples from the DOHMH and 311 APIs.
+3. Profiled the samples to understand their fields, quality, and grain.
+4. Downloaded the geographic and fast-food/QSR reference data.
+5. Created one shared restaurant-name normalization process for DOHMH names
+   and reference-brand names.
+6. Profiled all distinct live DOHMH restaurant names, not only the sample.
+7. Created review queues for unclear aliases and possible co-brands.
+8. Documented the MVP scope, assumptions, limitations, and expected pages.
+9. Ran the Phase 1 tests and final audit.
+
+Phase 1 did not download every DOHMH inspection row into the project. That
+full, incremental row-level ingestion belongs to Phase 2.
+
+## Phase 1 file and data flow
+
+### 0. Prepare the project
+
+```text
+requirements.txt ─────────> project Python environment (.venv)
+docker-compose.yml ───────> Docker Compose availability check
+project folders ──────────> places for ingestion code, data, docs, and tests
+```
+
+This step confirmed that the local tools and repository structure needed for
+later phases were ready. It did not create a production data pipeline.
+
+### 1. Download API samples
+
+```text
+NYC DOHMH API (43nn-pn8j) ──┐
+                            ├─> ingestion/pull_samples.py
+NYC 311 API (erm2-nwe9) ────┘             │
+                                          ├─> data/samples/dohmh_inspections_sample.json
+                                          └─> data/samples/311_food_pest_sample.json
+```
+
+`ingestion/pull_samples.py` requests 1,000 recent DOHMH rows and 1,000
+relevant 311 rows. The JSON files are small local samples used to understand
+the sources before full ingestion.
+
+### 2. Profile the samples
+
+```text
+data/samples/dohmh_inspections_sample.json ─┐
+                                            ├─> ingestion/profile_samples.py
+data/samples/311_food_pest_sample.json ─────┘                │
+                                                             └─> docs/project_documents/data_profile.md
+```
+
+`ingestion/profile_samples.py` checks columns, missing values, identifiers,
+dates, coordinates, duplicates, complaint types, and dataset grain. It writes
+the findings to `docs/project_documents/data_profile.md`.
+
+### 3. Build static reference files
+
+```text
+NYC borough, ZCTA, and NTA APIs ─┐
+                                 ├─> ingestion/download_reference_data.py
+OpenStreetMap brand data ────────┘                 │
+                                                   ├─> data/reference/nyc_borough_boundaries.geojson
+                                                   ├─> data/reference/nyc_zcta_boundaries.geojson
+                                                   ├─> data/reference/zip_to_nta.csv
+                                                   └─> data/reference/fast_food_brands.csv
+```
+
+The script downloads map boundaries, assigns each ZIP/ZCTA to its dominant
+NTA by geographic overlap, and creates the canonical fast-food/QSR registry.
+It also uses these reviewed inputs:
+
+- `data/reference/brand_aliases.csv` maps alternate names to canonical brands.
+- `data/reference/co_brand_associations.csv` preserves the individual brands
+  at reviewed co-branded locations.
+- `data/reference/brand_classification_overrides.csv` records explicit brand
+  inclusion and exclusion decisions.
+- `docs/project_documents/README.md` explains the files stored under
+  `data/reference/` and their columns.
+
+### 4. Normalize and profile all restaurant names
+
+```text
+Live distinct DOHMH camis/dba pairs ────────────────┐
+data/reference/fast_food_brands.csv ────────────────┤
+data/reference/brand_aliases.csv ───────────────────┤
+data/reference/co_brand_associations.csv ───────────┼─> ingestion/profile_restaurant_names.py
+data/reference/brand_classification_overrides.csv ───┤                  │
+ingestion/name_normalization.py (shared rules) ──────┘                  │
+                                                                       │
+                                                                       ├─> docs/project_documents/restaurant_name_profile.md
+                                                                       ├─> docs/brand_alias_review_queue.csv
+                                                                       └─> docs/co_brand_review_queue.csv
+```
+
+`ingestion/name_normalization.py` contains the shared rules used on both sides
+of a name match. For example, a DOHMH name such as `DUNKIN DONUTS` and the
+reference name `DUNKIN` pass through the same cleanup and alias logic before
+exact matching.
+
+`ingestion/profile_restaurant_names.py` retrieves every distinct live
+`camis`/`dba` pair, applies those shared rules, counts confirmed brand matches,
+and writes the name report and human-review queues. A reviewed co-brand keeps
+its original DBA and can produce multiple brand associations. An unknown
+combination stays in a queue instead of being accepted or stripped silently.
+
+### 5. Validate and document Phase 1
+
+```text
+tests/test_name_normalization.py ─> verifies normalization, aliases,
+                                    co-brands, and brand classification
+
+All Phase 1 findings ─────────────> docs/project_documents/phase1_scope.md
+```
+
+## How to run Phase 1
+
+From the project root in PowerShell, run:
+
+```powershell
+.\.venv\Scripts\python.exe ingestion\pull_samples.py
+.\.venv\Scripts\python.exe ingestion\download_reference_data.py
+.\.venv\Scripts\python.exe ingestion\profile_samples.py
+.\.venv\Scripts\python.exe ingestion\profile_restaurant_names.py
+.\.venv\Scripts\python.exe -m pytest tests\test_name_normalization.py -q
+```
+
+Run the commands in this order because later scripts use files created by
+earlier scripts. Existing files at the listed output paths are overwritten.
+Because the NYC APIs are live, rerunning the scripts can produce newer values.
+
+## Phase 1 results
+
+- 1,000 recent DOHMH inspection/violation sample rows were saved.
+- 1,000 filtered 311 food, food-poisoning, and rodent rows were saved.
+- The reference data contains 5 boroughs, 221 ZCTA features, and 221 ZIP-to-NTA
+  lookup rows.
+- The reviewed name references contain 109 canonical fast-food/QSR brands,
+  102 aliases, and 73 co-brand associations.
+- The full live-name profile covered 31,386 distinct DOHMH `camis`/`dba`
+  pairs—not only the 1,000-row sample.
+- It confirmed 2,988 DOHMH restaurant identifiers as fast-food/QSR matches;
+  161 were matched through reviewed co-brand associations.
+- All 22 Phase 1 name-normalization tests passed in the final audit.
+
 ## Included in the MVP
 
 - Restaurant lookup by name and ZIP/neighborhood
