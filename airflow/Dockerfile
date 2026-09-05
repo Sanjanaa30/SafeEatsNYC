@@ -2,9 +2,15 @@
 # It starts with the official Airflow image, adds your project's custom python dependencies, and makes sure they are installed securely under the correct user permissions.
 
 ARG AIRFLOW_VERSION=3.3.1
+FROM eclipse-temurin:21-jre-jammy AS java-runtime
 FROM apache/airflow:${AIRFLOW_VERSION}
 
 ARG AIRFLOW_VERSION
+USER root
+COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+USER airflow
 COPY --chown=airflow:root requirements.txt /opt/airflow/requirements-safeeats.txt
 RUN pip install --no-cache-dir \
     "apache-airflow==${AIRFLOW_VERSION}" \

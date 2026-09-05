@@ -4,9 +4,9 @@ SafeEats NYC is a restaurant-safety and consumer-intelligence platform that
 combines NYC restaurant inspections, relevant 311 complaints, geographic
 references, and reviewed restaurant-brand mappings.
 
-The project currently has a completed scope/discovery phase and a completed
-AWS S3 ingestion phase. Bronze data is collected through Python and orchestrated
-locally with Apache Airflow running in Docker.
+The project currently has completed scope/discovery, AWS S3 ingestion, and
+Silver transformation phases. Bronze data is collected through Python and
+Airflow, while isolated PySpark jobs in Docker build typed Parquet in S3 Silver.
 
 ## Project goals
 
@@ -34,7 +34,7 @@ The current visual reference is the
 |---|---|---|
 | Phase 1: Setup, discovery, profiling, and scope | Complete | APIs, dataset grain, reference data, name normalization, co-brand handling, assumptions, and MVP scope were validated and documented. |
 | Phase 2: Data ingestion | Complete | Historical and incremental DOHMH/311 JSON is written to private S3 Bronze through retryable, audited, idempotent Python jobs and an Airflow DAG. |
-| Phase 3: Silver transformation | Next | Read successful Bronze runs, parse schemas, deduplicate overlap, and write clean Parquet datasets. |
+| Phase 3: Silver transformation | Complete | Clean, typed, deduplicated Parquet and 100-meter complaint/restaurant matches are verified in S3 Silver. |
 | Later phases | Not started | dbt Gold models, Athena access, Streamlit implementation, and predictive-risk modeling. |
 
 Verified Phase 2 results:
@@ -49,9 +49,20 @@ Verified Phase 2 results:
 - Rerunning the same Airflow run did not add S3 object versions or overwrite
   raw data.
 
+Verified Phase 3 results:
+
+- 44 automated tests passed.
+- 250,379 Bronze inspection rows became 247,714 Silver
+  inspection/violation rows after removing 2,665 exact duplicates.
+- 151,170 Bronze 311 rows became 150,231 unique complaints after removing 939
+  older duplicate versions.
+- 101,757 complaints matched a restaurant within 100 meters; 47,529 remained
+  unmatched and 945 coordinate-less complaints were preserved.
+- Every production Parquet read-back count matched its expected output count.
+
 ## Architecture
 
-### Implemented through Phase 2
+### Implemented through Phase 3
 
 ```text
 NYC DOHMH API ---------+
@@ -70,6 +81,14 @@ Docker Compose
     +--> Airflow API/UI                          +--> runs Python ingestion
     |
     +--> PostgreSQL Airflow metadata
+
+S3 Bronze JSON
+    |
+    +--> isolated PySpark jobs in the Docker Airflow image
+             |
+             +--> S3 Silver inspections Parquet
+             +--> S3 Silver 311 Parquet
+             `--> S3 Silver complaint/restaurant matches
 ```
 
 ### Planned end-to-end platform
@@ -89,6 +108,8 @@ Docker, Airflow, and S3 have different responsibilities:
 - Airflow schedules and coordinates the ingestion tasks.
 - Python requests, validates, and writes the source responses.
 - S3 permanently stores the unchanged Bronze JSON.
+- PySpark cleans, types, deduplicates, and geospatially matches Silver data.
+- S3 stores versioned, partitioned Silver Parquet and quality reports.
 - PostgreSQL stores Airflow's internal metadata.
 - SQLite stores SafeEats ingestion audit records and incremental watermarks.
 - Redis temporarily passes scheduled tasks to the Airflow worker.
@@ -167,7 +188,7 @@ SafeEatsNYC/
 |   `-- co_brand_review_queue.csv
 |-- ingestion/                 # API, validation, storage, and audit code
 |-- tests/                     # ingestion, S3, and name-normalization tests
-|-- spark/                     # Phase 3 placeholder
+|-- spark/                     # Phase 3 schemas, cleaning, deduplication, and matching
 |-- dbt/                       # later Gold-model placeholder
 |-- streamlit_app/             # later dashboard placeholder
 |-- ml/                        # later predictive-risk placeholder
@@ -225,13 +246,14 @@ aws sts get-caller-identity --profile safeeats-dev
 ## Run the tests
 
 ```powershell
-python -m pytest tests -q --basetemp data/audit/pytest-temp
+docker-compose exec airflow-worker python -m pytest `
+  /opt/safeeats/tests -q -p no:cacheprovider
 ```
 
-Expected result for the current implementation:
+Expected result inside the Docker worker for the current implementation:
 
 ```text
-32 passed
+44 passed
 ```
 
 ## Start Airflow
@@ -297,6 +319,20 @@ exact historical, incremental, S3 inspection, Airflow, retry, and idempotency
 commands are in the
 [Phase 2 ingestion runbook](docs/project_documents/phase2_ingestion.md).
 
+## Silver transformation
+
+Phase 3 reads successful production Bronze runs and writes immutable Parquet
+snapshots under `s3://<bucket>/silver/`. Each production output includes a JSON
+quality report with input, deduplication, output, and read-back counts.
+
+The jobs run as isolated Docker Compose processes so local Spark has predictable
+memory. Airflow continues to schedule Bronze ingestion; retry-safe automatic
+Silver scheduling is reserved for the later full-DAG orchestration step.
+
+See the [Phase 3 Silver runbook](docs/project_documents/phase3_silver.md) for
+the complete commands, data flow, S3 paths, quality results, matching policy,
+and Spark warning guidance.
+
 ## Documentation
 
 - [Two-week project plan](docs/project_documents/NYC_Restaurant_Safety_Platform_2Week_Plan.md)
@@ -305,6 +341,7 @@ commands are in the
 - [Restaurant-name profile](docs/project_documents/restaurant_name_profile.md)
 - [Static reference-data guide](docs/project_documents/README.md)
 - [Phase 2 ingestion runbook](docs/project_documents/phase2_ingestion.md)
+- [Phase 3 Silver and geospatial runbook](docs/project_documents/phase3_silver.md)
 - [Dashboard HTML mockup](docs/project_documents/safeeats_dashboard_mockup.html)
 
 ## MVP assumptions and exclusions
@@ -319,6 +356,10 @@ Other important limitations:
 
 - Bronze intentionally contains overlapping incremental records; Silver must
   deduplicate them.
+- A nearest-restaurant match means geographic proximity, not proof that a
+  restaurant caused a complaint.
+- Coordinate-less complaints remain valid but cannot be geospatially matched.
+- Restaurant matching currently uses the latest valid location per CAMIS.
 - Offset pagination is not a transactional snapshot when the source changes
   during a long download.
 - A two-day overlap cannot capture a correction whose source timestamp remains
@@ -327,4 +368,4 @@ Other important limitations:
   production multi-machine deployment.
 
 Detailed assumptions, dataset grain, normalization policy, and limitations are
-documented in the Phase 1 and Phase 2 files linked above.
+documented in the Phase 1, Phase 2, and Phase 3 files linked above.

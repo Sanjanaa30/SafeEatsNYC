@@ -18,6 +18,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the database connection string for Airflow's metadata database.
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the result backend for Celery tasks, using the same PostgreSQL database as Airflow's metadata.
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0 # Specifies the Redis broker URL for Celery task messages.
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: "2" # Keeps enough Docker memory available for local PySpark jobs.
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-safeeats_local_development_only} # Specifies the JWT secret for API authentication.
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true" # Enables health checks for the Airflow scheduler.
     PYTHONPATH: /opt/safeeats # Specifies the Python path for the Airflow environment, allowing access to custom modules and scripts.
@@ -30,11 +31,17 @@ x-airflow-common: &airflow-common
     SAFEEATS_STORAGE_BACKEND: ${SAFEEATS_STORAGE_BACKEND:-s3} # Uses Amazon S3 as the Bronze storage backend.
     SAFEEATS_S3_BUCKET: ${SAFEEATS_S3_BUCKET:?Set SAFEEATS_S3_BUCKET in .env} # Specifies the private S3 bucket receiving Bronze JSON.
     SAFEEATS_S3_PREFIX: ${SAFEEATS_S3_PREFIX:-bronze} # Places all raw objects under the bronze prefix.
+    SAFEEATS_SILVER_PREFIX: ${SAFEEATS_SILVER_PREFIX:-silver} # Places cleaned Parquet objects under the silver prefix.
     SAFEEATS_BRONZE_ROOT: ${SAFEEATS_BRONZE_ROOT:-/opt/safeeats/data/bronze} # Specifies the root directory for the bronze layer of the data lake within the SafeEats project.
     SAFEEATS_AUDIT_DB: ${SAFEEATS_AUDIT_DB:-/opt/safeeats/data/audit/ingestion_audit.db} # Specifies the path to the ingestion audit database within the SafeEats project.
     SAFEEATS_INGESTION_PAGE_SIZE: ${SAFEEATS_INGESTION_PAGE_SIZE:-10000} # Specifies the page size for ingestion tasks within the SafeEats project.
     SAFEEATS_OVERLAP_DAYS: ${SAFEEATS_OVERLAP_DAYS:-2} # Specifies the number of days to overlap data during ingestion within the SafeEats project.
     SAFEEATS_INITIAL_LOOKBACK_DAYS: ${SAFEEATS_INITIAL_LOOKBACK_DAYS:-1095} # Specifies the initial lookback period in days for data ingestion within the SafeEats project.
+    JAVA_HOME: /opt/java/openjdk # Uses Java 21 inside Docker; the host Java installation is unchanged.
+    PYSPARK_PYTHON: /usr/local/bin/python # Uses the Airflow image's Python interpreter for Spark workers.
+    PYSPARK_DRIVER_PYTHON: /usr/local/bin/python # Uses the same Python interpreter for the Spark driver.
+    PYSPARK_SUBMIT_ARGS: "--driver-memory 768m pyspark-shell" # Fits the Spark driver inside the local Docker memory allocation.
+    SAFEEATS_SPARK_MASTER: "local[1]" # Runs one Spark task at a time to keep local memory use predictable.
     NYC_OPEN_DATA_APP_TOKEN: ${NYC_OPEN_DATA_APP_TOKEN:-} # Specifies the API token for accessing NYC Open Data within the SafeEats project.
   volumes: # Specifies the volumes to mount into the Airflow container, including DAGs, logs, config, plugins, and the SafeEats project directory.
     - ./airflow/dags:/opt/airflow/dags
@@ -42,6 +49,7 @@ x-airflow-common: &airflow-common
     - ./airflow/config:/opt/airflow/config
     - ./airflow/plugins:/opt/airflow/plugins
     - ./:/opt/safeeats # Mounts the current directory into the Airflow container at /opt/safeeats, allowing access to the SafeEats project files.
+    - spark-ivy-cache:/home/airflow/.ivy2.5.2 # Reuses the large Spark S3 connector download across one-off Spark containers.
     - type: bind # Gives local Airflow access to the existing AWS login profile without copying credentials into the image.
       source: ${USERPROFILE}/.aws
       target: /home/airflow/.aws
@@ -171,7 +179,13 @@ services: # Defines the services for the Docker Compose setup, including Airflow
 
   airflow-init:
     <<: *airflow-common
-    command: version
+    command:
+      - bash
+      - -c
+      - |
+        mkdir -p /home/airflow/.ivy2.5.2/cache /home/airflow/.ivy2.5.2/jars
+        chown -R "${AIRFLOW_UID:-50000}:0" /home/airflow/.ivy2.5.2
+        exec airflow version
     environment:
       <<: *airflow-common-environment
       _AIRFLOW_DB_MIGRATE: "true"
@@ -189,6 +203,7 @@ services: # Defines the services for the Docker Compose setup, including Airflow
 
 volumes:
   airflow-postgres:
+  spark-ivy-cache:
 
 
 # This is the end of the Docker Compose configuration for the Airflow setup.

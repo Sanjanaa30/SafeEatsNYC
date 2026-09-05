@@ -96,7 +96,7 @@ def ingest_source(source: SourceConfig) -> dict[str, Any]:
     dag_id="safeeats_ingestion",
     description="Incrementally preserve DOHMH and relevant 311 JSON in Bronze.",
     schedule="0 10 * * *",
-    start_date=pendulum.datetime(2026, 8, 29, tz="America/New_York"),
+    start_date=pendulum.datetime(2026, 8, 29, tz=ZoneInfo("America/New_York")),
     catchup=False,
     max_active_runs=1,
     default_args={
