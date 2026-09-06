@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: dim_restaurant
+    description: One current Type 1 row per DOHMH restaurant, retaining every reviewed co-brand association.
+    columns:
+      - name: restaurant_key
+        data_tests: [not_null, unique]
+      - name: camis
+        data_tests: [not_null, unique]
+      - name: borough_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_borough')
+                field: borough_key
+      - name: chain_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_chain')
+                field: chain_key
+      - name: is_chain
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_confirmed_fast_food
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+
+  - name: dim_chain
+    description: One row per normalized restaurant name found at three or more CAMIS locations.
+    columns:
+      - name: chain_key
+        data_tests: [not_null, unique]
+      - name: chain_name
+        data_tests: [not_null, unique]
+      - name: location_count
+        data_tests: [not_null]
+
+  - name: dim_borough
+    description: The five NYC boroughs and their current restaurant counts.
+    columns:
+      - name: borough_key
+        data_tests: [not_null, unique]
+      - name: borough_name
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: ['BRONX', 'BROOKLYN', 'MANHATTAN', 'QUEENS', 'STATEN ISLAND']
+
+  - name: dim_date
+    description: Continuous calendar covering all inspection and complaint dates.
+    columns:
+      - name: date_key
+        data_tests: [not_null, unique]
+      - name: calendar_date
+        data_tests: [not_null, unique]
+      - name: is_weekend
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+
+  - name: dim_violation
+    description: One row per non-null DOHMH violation code.
+    columns:
+      - name: violation_key
+        data_tests: [not_null, unique]
+      - name: violation_code
+        data_tests: [not_null, unique]
+      - name: is_critical
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+
+  - name: dim_complaint_type
+    description: One row per relevant 311 complaint category.
+    columns:
+      - name: complaint_type_key
+        data_tests: [not_null, unique]
+      - name: complaint_type
+        data_tests: [not_null, unique]

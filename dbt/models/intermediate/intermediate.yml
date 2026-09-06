@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: int_inspection_events
+    description: One inspection event per restaurant and inspection identifier, preventing violation rows from multiplying inspection metrics.
+    columns:
+      - name: inspection_id
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests: [not_null]
+
+  - name: int_latest_graded_inspection
+    description: The latest A, B, or C inspection for each restaurant that has a graded inspection.
+    columns:
+      - name: restaurant_key
+        data_tests: [not_null, unique]
+      - name: grade
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+
+  - name: stg_restaurant_current
+    description: One deterministic current Type 1 restaurant record per DOHMH CAMIS.
+    columns:
+      - name: camis
+        data_tests: [not_null, unique]
+
+  - name: stg_chain_flags
+    description: Current restaurants with the independent three-location chain heuristic.
+    columns:
+      - name: camis
+        data_tests: [not_null, unique]
+      - name: is_chain
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_confirmed_fast_food
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false

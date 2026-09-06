@@ -1,0 +1,119 @@
+version: 2
+
+models:
+  - name: mart_borough_grade_summary
+    description: Current A, B, and C restaurant distribution for each borough and citywide.
+    columns:
+      - name: borough_grade_summary_key
+        data_tests: [not_null, unique]
+      - name: grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+      - name: restaurant_count
+        data_tests: [not_null]
+      - name: total_restaurants
+        data_tests: [not_null]
+
+  - name: mart_cuisine_borough_heatmap
+    description: Grade A percentages by current restaurant cuisine and borough.
+    columns:
+      - name: cuisine_borough_key
+        data_tests: [not_null, unique]
+      - name: cuisine
+        data_tests: [not_null]
+      - name: borough_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_borough')
+                field: borough_key
+      - name: total_restaurants
+        data_tests: [not_null]
+
+  - name: mart_violation_by_borough
+    description: Violation frequency and affected restaurants by borough and violation type.
+    columns:
+      - name: violation_borough_key
+        data_tests: [not_null, unique]
+      - name: borough_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_borough')
+                field: borough_key
+      - name: violation_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_violation')
+                field: violation_key
+      - name: violation_count
+        data_tests: [not_null]
+      - name: violations_per_100_restaurants
+        data_tests: [not_null]
+
+  - name: mart_weekly_311_vs_inspection
+    description: Zero-filled weekly complaint and critical-violation counts for each borough and citywide.
+    columns:
+      - name: weekly_area_key
+        data_tests: [not_null, unique]
+      - name: week_start_date
+        data_tests: [not_null]
+      - name: complaint_count
+        data_tests: [not_null]
+      - name: critical_violation_count
+        data_tests: [not_null]
+      - name: total_restaurants
+        data_tests: [not_null]
+
+  - name: mart_restaurant_grade_history
+    description: A, B, and C inspection timeline with current, consistency, and improvement indicators.
+    columns:
+      - name: restaurant_grade_history_key
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+
+  - name: mart_chain_summary
+    description: One dashboard row per detected chain with current location-grade and confirmed-brand metrics.
+    columns:
+      - name: chain_key
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_chain')
+                field: chain_key
+      - name: location_count
+        data_tests: [not_null]
+      - name: is_confirmed_fast_food
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false

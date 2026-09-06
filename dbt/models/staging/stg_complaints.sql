@@ -1,0 +1,27 @@
+select
+    unique_key as complaint_id,
+    created_date,
+    closed_date,
+    complaint_type,
+    descriptor,
+    location_type,
+    incident_zip,
+    incident_address,
+    borough,
+    status,
+    latitude,
+    longitude,
+    restaurant_camis,
+    matched_restaurant_name,
+    matched_restaurant_name_normalized,
+    matched_restaurant_address,
+    restaurant_latitude,
+    restaurant_longitude,
+    nearest_candidate_distance_meters,
+    match_distance_meters,
+    restaurant_match_status,
+    match_threshold_meters,
+    complaint_year,
+    complaint_month
+from {{ source('silver', 'complaints') }}
+

@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Clean, deduplicated Phase 3 Parquet registered in Athena.
+    database: awsdatacatalog
+    schema: "{{ env_var('ATHENA_SILVER_DATABASE', 'safeeats_silver') }}"
+    tables:
+      - name: inspections
+        description: One row per deduplicated DOHMH inspection/violation record.
+      - name: complaints
+        description: One row per deduplicated 311 complaint with match status.
+

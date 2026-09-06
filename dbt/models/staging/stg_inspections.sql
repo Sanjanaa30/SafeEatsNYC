@@ -1,0 +1,26 @@
+select
+    inspection_violation_id,
+    camis,
+    nullif(trim(restaurant_name_original), '') as restaurant_name,
+    nullif(trim(restaurant_name_normalized), '') as restaurant_name_normalized,
+    fast_food_brand_names,
+    coalesce(is_reviewed_co_brand, false) as is_reviewed_co_brand,
+    coalesce(is_fast_food, false) as is_confirmed_fast_food,
+    nullif(trim(borough), '') as borough,
+    nullif(trim(address_display), '') as address,
+    nullif(trim(zipcode), '') as zipcode,
+    nullif(trim(cuisine_description), '') as cuisine,
+    inspection_date,
+    violation_code,
+    violation_description,
+    critical_flag,
+    score,
+    nullif(trim(upper(grade)), '') as grade,
+    inspection_type,
+    latitude,
+    longitude,
+    coordinate_status,
+    inspection_year,
+    inspection_month
+from {{ source('silver', 'inspections') }}
+

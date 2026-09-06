@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: fact_inspection
+    description: One row per deduplicated DOHMH inspection and violation source record.
+    columns:
+      - name: inspection_event_key
+        data_tests: [not_null, unique]
+      - name: inspection_id
+        data_tests: [not_null]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: violation_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_violation')
+                field: violation_key
+      - name: borough_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_borough')
+                field: borough_key
+
+  - name: fact_311_complaint
+    description: One row per 311 complaint, with a nullable restaurant key when no nearby match exists.
+    columns:
+      - name: complaint_id
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: complaint_type_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_complaint_type')
+                field: complaint_type_key
+      - name: borough_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_borough')
+                field: borough_key
+      - name: restaurant_match_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - MATCHED
+                  - NO_RESTAURANT_WITHIN_THRESHOLD
+                  - NO_VALID_COORDINATES

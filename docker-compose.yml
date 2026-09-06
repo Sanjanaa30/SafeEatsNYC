@@ -201,6 +201,33 @@ services: # Defines the services for the Docker Compose setup, including Airflow
     depends_on:
       <<: *airflow-common-depends-on
 
+  dbt: # Runs Phase 4 Athena transformations without enlarging the Airflow image.
+    build:
+      context: .
+      dockerfile: warehouse/Dockerfile
+    working_dir: /usr/app
+    profiles: [warehouse]
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE:-safeeats-dev}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_CONFIG_FILE: /root/.aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /root/.aws/credentials
+      SAFEEATS_S3_BUCKET: ${SAFEEATS_S3_BUCKET:?Set SAFEEATS_S3_BUCKET in .env}
+      ATHENA_SILVER_DATABASE: ${ATHENA_SILVER_DATABASE:-safeeats_silver}
+      ATHENA_DBT_SCHEMA: ${ATHENA_DBT_SCHEMA:-safeeats_gold}
+      ATHENA_WORKGROUP: ${ATHENA_WORKGROUP:-primary}
+    volumes:
+      - ./dbt:/usr/app
+      - ./data/reference:/usr/app/seeds:ro
+      - type: bind
+        source: ${USERPROFILE}/.aws
+        target: /root/.aws
+        read_only: true
+      - type: bind
+        source: ${USERPROFILE}/.aws/login/cache
+        target: /root/.aws/login/cache
+
 volumes:
   airflow-postgres:
   spark-ivy-cache:

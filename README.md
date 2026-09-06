@@ -4,9 +4,10 @@ SafeEats NYC is a restaurant-safety and consumer-intelligence platform that
 combines NYC restaurant inspections, relevant 311 complaints, geographic
 references, and reviewed restaurant-brand mappings.
 
-The project currently has completed scope/discovery, AWS S3 ingestion, and
-Silver transformation phases. Bronze data is collected through Python and
-Airflow, while isolated PySpark jobs in Docker build typed Parquet in S3 Silver.
+The project currently has completed scope/discovery, AWS S3 ingestion, Silver
+transformation, and analytical-warehouse phases. Bronze data is collected
+through Python and Airflow, isolated PySpark jobs build typed Parquet in S3
+Silver, and dbt creates tested Gold tables through Amazon Athena.
 
 ## Project goals
 
@@ -35,7 +36,8 @@ The current visual reference is the
 | Phase 1: Setup, discovery, profiling, and scope | Complete | APIs, dataset grain, reference data, name normalization, co-brand handling, assumptions, and MVP scope were validated and documented. |
 | Phase 2: Data ingestion | Complete | Historical and incremental DOHMH/311 JSON is written to private S3 Bronze through retryable, audited, idempotent Python jobs and an Airflow DAG. |
 | Phase 3: Silver transformation | Complete | Clean, typed, deduplicated Parquet and 100-meter complaint/restaurant matches are verified in S3 Silver. |
-| Later phases | Not started | dbt Gold models, Athena access, Streamlit implementation, and predictive-risk modeling. |
+| Phase 4: Athena and dbt warehouse | Complete | Two staging views, six dimensions, two facts, and six dashboard marts were built and validated with 119 dbt tests and 19 reconciliation checks. |
+| Later phases | Not started | Streamlit implementation, predictive-risk modeling, and full end-to-end Airflow orchestration. |
 
 Verified Phase 2 results:
 
@@ -60,9 +62,20 @@ Verified Phase 3 results:
   unmatched and 945 coordinate-less complaints were preserved.
 - Every production Parquet read-back count matched its expected output count.
 
+Verified Phase 4 results:
+
+- Athena reads 247,714 inspection/violation rows and 150,231 complaints from
+  the immutable Phase 3 Silver snapshot.
+- Gold contains 27,220 restaurants, 705 detected chains, five boroughs, 1,097
+  dates, 113 violation types, and three complaint types.
+- Both facts preserve their intended Silver grain.
+- Six dashboard marts contain raw totals and fair per-100-restaurant metrics.
+- All 119 dbt tests and all 19 cross-layer reconciliation checks passed.
+- Newer Bronze rows are reported separately until the next Silver/Gold refresh.
+
 ## Architecture
 
-### Implemented through Phase 3
+### Implemented through Phase 4
 
 ```text
 NYC DOHMH API ---------+
@@ -89,6 +102,16 @@ S3 Bronze JSON
              +--> S3 Silver inspections Parquet
              +--> S3 Silver 311 Parquet
              `--> S3 Silver complaint/restaurant matches
+
+S3 Silver Parquet
+    |
+    +--> Amazon Athena external tables
+             |
+             +--> dbt staging and intermediate views
+                      |
+                      +--> Gold dimensions and facts
+                               |
+                               `--> six dashboard marts in S3 Gold
 ```
 
 ### Planned end-to-end platform
@@ -189,7 +212,7 @@ SafeEatsNYC/
 |-- ingestion/                 # API, validation, storage, and audit code
 |-- tests/                     # ingestion, S3, and name-normalization tests
 |-- spark/                     # Phase 3 schemas, cleaning, deduplication, and matching
-|-- dbt/                       # later Gold-model placeholder
+|-- dbt/                       # Athena staging, dimensions, facts, marts, and tests
 |-- streamlit_app/             # later dashboard placeholder
 |-- ml/                        # later predictive-risk placeholder
 |-- docker-compose.yml
@@ -333,6 +356,18 @@ See the [Phase 3 Silver runbook](docs/project_documents/phase3_silver.md) for
 the complete commands, data flow, S3 paths, quality results, matching policy,
 and Spark warning guidance.
 
+## Analytical warehouse
+
+Phase 4 registers the immutable Silver Parquet snapshots in Athena and uses a
+separate dbt Docker service to build business-friendly Gold views and tables.
+The Gold star schema contains six dimensions and two facts. Six tested marts
+provide grade, cuisine, violation, weekly complaint, restaurant-history, and
+chain results for the future dashboard.
+
+See the [Phase 4 Athena and dbt warehouse guide](docs/project_documents/phase4_warehouse.md)
+for the complete command sequence, table grains, model flow, chain policy,
+fair-comparison formulas, verified counts, troubleshooting, and limitations.
+
 ## Documentation
 
 - [Two-week project plan](docs/project_documents/NYC_Restaurant_Safety_Platform_2Week_Plan.md)
@@ -342,6 +377,8 @@ and Spark warning guidance.
 - [Static reference-data guide](docs/project_documents/README.md)
 - [Phase 2 ingestion runbook](docs/project_documents/phase2_ingestion.md)
 - [Phase 3 Silver and geospatial runbook](docs/project_documents/phase3_silver.md)
+- [Phase 4 Athena and dbt warehouse guide](docs/project_documents/phase4_warehouse.md)
+- [Latest Phase 4 reconciliation](docs/project_documents/phase4_reconciliation.md)
 - [Dashboard HTML mockup](docs/project_documents/safeeats_dashboard_mockup.html)
 
 ## MVP assumptions and exclusions

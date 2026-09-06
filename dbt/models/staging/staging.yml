@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: stg_inspections
+    description: Thin business-friendly view over Silver inspection violations.
+    columns:
+      - name: inspection_violation_id
+        data_tests: [not_null, unique]
+      - name: camis
+        data_tests: [not_null]
+      - name: inspection_date
+        data_tests: [not_null]
+      - name: is_confirmed_fast_food
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+
+  - name: stg_complaints
+    description: Thin business-friendly view over Silver 311 match results.
+    columns:
+      - name: complaint_id
+        data_tests: [not_null, unique]
+      - name: created_date
+        data_tests: [not_null]
+      - name: complaint_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['FOOD ESTABLISHMENT', 'FOOD POISONING', 'RODENT']
+      - name: restaurant_match_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - MATCHED
+                  - NO_RESTAURANT_WITHIN_THRESHOLD
+                  - NO_VALID_COORDINATES

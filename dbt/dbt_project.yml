@@ -1,0 +1,29 @@
+name: safeeats_warehouse
+version: "1.0.0"
+config-version: 2
+
+profile: safeeats_athena
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+models:
+  safeeats_warehouse:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    dimensions:
+      +materialized: table
+    facts:
+      +materialized: table
+    marts:
+      +materialized: table
+
+seeds:
+  safeeats_warehouse:
+    zip_to_nta:
+      +column_types:
+        zip: varchar
