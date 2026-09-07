@@ -5,9 +5,11 @@ combines NYC restaurant inspections, relevant 311 complaints, geographic
 references, and reviewed restaurant-brand mappings.
 
 The project currently has completed scope/discovery, AWS S3 ingestion, Silver
-transformation, and analytical-warehouse phases. Bronze data is collected
-through Python and Airflow, isolated PySpark jobs build typed Parquet in S3
-Silver, and dbt creates tested Gold tables through Amazon Athena.
+transformation, analytical-warehouse, predictive-model, and complete-pipeline
+automation phases. Airflow now coordinates Bronze ingestion, PySpark Silver
+processing, geospatial matching, Athena/dbt Gold builds, data tests, and
+reconciliation. The selected XGBoost model writes current restaurant risk
+scores to S3 through a separate controlled modeling workflow.
 
 ## Project goals
 
@@ -37,7 +39,9 @@ The current visual reference is the
 | Phase 2: Data ingestion | Complete | Historical and incremental DOHMH/311 JSON is written to private S3 Bronze through retryable, audited, idempotent Python jobs and an Airflow DAG. |
 | Phase 3: Silver transformation | Complete | Clean, typed, deduplicated Parquet and 100-meter complaint/restaurant matches are verified in S3 Silver. |
 | Phase 4: Athena and dbt warehouse | Complete | Two staging views, six dimensions, two facts, and six dashboard marts were built and validated with 119 dbt tests and 19 reconciliation checks. |
-| Later phases | Not started | Streamlit implementation, predictive-risk modeling, and full end-to-end Airflow orchestration. |
+| Phase 5: Predictive model | Complete | A leakage-safe time split compared calibrated logistic regression with XGBoost; XGBoost was selected, retrained, and used to score 24,392 eligible restaurants. |
+| Phase 6: Complete automation and CI | Complete | One daily Airflow DAG runs Bronze through Gold, tests and reconciliation; safe retries, reruns, output protection, and CI configuration were verified. |
+| Later phases | Not started | Streamlit dashboard implementation. |
 
 Verified Phase 2 results:
 
@@ -73,9 +77,21 @@ Verified Phase 4 results:
 - All 119 dbt tests and all 19 cross-layer reconciliation checks passed.
 - Newer Bronze rows are reported separately until the next Silver/Gold refresh.
 
+Verified Phase 6 results:
+
+- One Airflow DAG connects 13 tasks from ingestion through reconciliation.
+- A controlled failure retried automatically and succeeded.
+- Rerunning the same successful run ID did not add or overwrite S3 objects.
+- Previous successful outputs remained unchanged during failure testing.
+- The verified full run built 24 dbt models, passed 167 dbt tests, and passed
+  all 19 reconciliation checks.
+- All 57 Python tests and the critical Ruff lint checks passed locally.
+- GitHub Actions now defines safe Python, lint, and offline dbt-parse checks for
+  pushes and pull requests.
+
 ## Architecture
 
-### Implemented through Phase 4
+### Implemented through Phase 6
 
 ```text
 NYC DOHMH API ---------+
@@ -368,6 +384,30 @@ See the [Phase 4 Athena and dbt warehouse guide](docs/project_documents/phase4_w
 for the complete command sequence, table grains, model flow, chain policy,
 fair-comparison formulas, verified counts, troubleshooting, and limitations.
 
+## Predictive model
+
+Phase 5 creates next-inspection B/C labels, builds past-only features, uses a
+chronological split, and compares calibrated logistic regression with XGBoost.
+XGBoost was selected and retrained on 17,596 mature outcomes. The final model
+produced verified current risk scores for 24,392 restaurants with graded
+history.
+
+See the [Phase 5 predictive-model guide](docs/project_documents/phase5_predictive_model.md)
+for the complete feature flow, simple term definitions, commands, metrics,
+label-maturation policy, model selection, S3 paths, and limitations.
+
+## Complete automation and CI
+
+Phase 6 connects the existing Phase 2 through Phase 4 jobs into one daily
+Airflow DAG. It downloads both APIs, refreshes Silver and complaint matches,
+points Athena at the new outputs, rebuilds and tests Gold, and reconciles all
+layers. Run-specific output names and quality reports make retries safe, while
+GitHub Actions checks code changes without using production AWS credentials.
+
+See the [Phase 6 automation and CI guide](docs/project_documents/phase6_automation_ci.md)
+for the complete flow, file relationships, commands, verified results, retry
+and idempotency behavior, CI design, and limitations.
+
 ## Documentation
 
 - [Two-week project plan](docs/project_documents/NYC_Restaurant_Safety_Platform_2Week_Plan.md)
@@ -379,6 +419,8 @@ fair-comparison formulas, verified counts, troubleshooting, and limitations.
 - [Phase 3 Silver and geospatial runbook](docs/project_documents/phase3_silver.md)
 - [Phase 4 Athena and dbt warehouse guide](docs/project_documents/phase4_warehouse.md)
 - [Latest Phase 4 reconciliation](docs/project_documents/phase4_reconciliation.md)
+- [Phase 5 predictive-model guide](docs/project_documents/phase5_predictive_model.md)
+- [Phase 6 automation and CI guide](docs/project_documents/phase6_automation_ci.md)
 - [Dashboard HTML mockup](docs/project_documents/safeeats_dashboard_mockup.html)
 
 ## MVP assumptions and exclusions

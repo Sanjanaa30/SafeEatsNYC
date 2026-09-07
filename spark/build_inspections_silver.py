@@ -17,6 +17,7 @@ from spark.inspection_cleaning import clean_inspections
 from spark.inspection_deduplication import deduplicate_inspections
 from spark.schemas import DOHMH_RAW_SCHEMA
 from spark.session import create_spark_session
+from spark.run_safety import prepare_run_output
 
 
 SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -29,6 +30,11 @@ def parse_arguments() -> argparse.Namespace:
         description="Clean, deduplicate, and write DOHMH Silver Parquet."
     )
     parser.add_argument("--run-id", required=True)
+    parser.add_argument(
+        "--retry-incomplete",
+        action="store_true",
+        help="Clear only this run's incomplete S3 output before retrying.",
+    )
     parser.add_argument(
         "--audit-db",
         type=Path,
@@ -123,8 +129,16 @@ def main() -> None:
     profile = os.getenv("AWS_PROFILE", "safeeats-dev")
     client = boto3.Session(profile_name=profile, region_name=region).client("s3")
     locations = s3_locations(run_id)
-    ensure_prefix_is_new(client, locations["bucket"], locations["accepted_key"])
-    ensure_prefix_is_new(client, locations["bucket"], locations["rejected_key"])
+    previous = prepare_run_output(
+        client,
+        locations["bucket"],
+        [locations["accepted_key"], locations["rejected_key"]],
+        locations["report_key"],
+        arguments.retry_incomplete,
+    )
+    if previous is not None:
+        print(json.dumps(previous, indent=2, sort_keys=True))
+        return
 
     spark = create_spark_session("safeeats-build-inspections-silver")
     try:
@@ -143,11 +157,13 @@ def main() -> None:
 
         deduplicated = deduplicate_inspections(bronze).cache()
         deduplicated_count = deduplicated.count()
+        bronze.unpersist()
         accepted, rejected = clean_inspections(deduplicated)
         accepted.cache()
         rejected.cache()
         accepted_count = accepted.count()
         rejected_count = rejected.count()
+        deduplicated.unpersist()
         if accepted_count + rejected_count != deduplicated_count:
             raise RuntimeError("Accepted and rejected counts do not reconcile.")
 

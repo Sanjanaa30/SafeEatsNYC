@@ -13,9 +13,8 @@ from typing import Any
 
 import boto3
 from dotenv import load_dotenv
+from spark.bronze_runs import PRODUCTION_RUN_PREFIXES
 
-
-PRODUCTION_RUN_PREFIXES = ("initial-3y-", "scheduled__")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -48,6 +47,10 @@ def parse_arguments() -> argparse.Namespace:
         "--markdown-report",
         type=Path,
         default=Path("docs/project_documents/phase4_reconciliation.md"),
+    )
+    parser.add_argument(
+        "--s3-report-key",
+        default="gold/_audit/phase4_reconciliation/latest.json",
     )
     return parser.parse_args()
 
@@ -252,7 +255,7 @@ def markdown(report: dict[str, Any]) -> str:
         "",
         "## Validation",
         "",
-        f"All **{len(report['checks'])}** reconciliation checks passed. The separate dbt suite also passed all 119 data tests.",
+        f"All **{len(report['checks'])}** reconciliation checks passed. The dbt test task completed successfully before reconciliation.",
         "",
     ]
     return "\n".join(lines)
@@ -370,7 +373,7 @@ def main() -> None:
 
     s3.put_object(
         Bucket=bucket,
-        Key="gold/_audit/phase4_reconciliation/latest.json",
+        Key=arguments.s3_report_key,
         Body=json.dumps(report, indent=2).encode("utf-8"),
         ContentType="application/json",
     )
@@ -384,7 +387,7 @@ def main() -> None:
         },
         "local_report": str(arguments.local_report),
         "markdown_report": str(arguments.markdown_report),
-        "s3_report": f"s3://{bucket}/gold/_audit/phase4_reconciliation/latest.json",
+        "s3_report": f"s3://{bucket}/{arguments.s3_report_key}",
     }, indent=2))
 
     if failed_checks:

@@ -5,7 +5,7 @@ config-version: 2
 profile: safeeats_athena
 
 model-paths: ["models"]
-seed-paths: ["seeds"]
+seed-paths: ["../data/reference"]
 test-paths: ["tests"]
 clean-targets: ["target", "dbt_packages", "logs"]
 
@@ -20,6 +20,8 @@ models:
     facts:
       +materialized: table
     marts:
+      +materialized: table
+    ml:
       +materialized: table
 
 seeds:

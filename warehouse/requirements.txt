@@ -1,3 +1,5 @@
 dbt-core>=1.12,<1.13
 dbt-athena>=1.11,<1.12
-botocore[crt]
+boto3==1.43.56
+botocore[crt]==1.43.56
+importlib-metadata<9

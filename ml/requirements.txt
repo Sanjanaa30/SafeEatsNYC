@@ -1,11 +1,10 @@
 boto3
 botocore[crt]
+joblib
+numpy
 pandas>=2.2,<3
+pyarrow>=20,<22
 python-dotenv
 pytest
-requests>=2.32,<3
-geopandas
-pyspark==4.2.0
-pyarrow>=20,<22
 scikit-learn>=1.7,<1.8
 xgboost>=3,<4

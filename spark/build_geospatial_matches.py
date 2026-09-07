@@ -21,6 +21,7 @@ from spark.geospatial_matching import (
     nearest_restaurant_matches,
 )
 from spark.session import create_spark_session
+from spark.run_safety import prepare_run_output
 from pyspark.sql import functions as F
 
 
@@ -33,6 +34,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--inspections-run-id", required=True)
     parser.add_argument("--complaints-run-id", required=True)
+    parser.add_argument(
+        "--retry-incomplete",
+        action="store_true",
+        help="Clear only this run's incomplete S3 output before retrying.",
+    )
     parser.add_argument(
         "--threshold-meters",
         type=float,
@@ -93,7 +99,21 @@ def main() -> None:
     output_key = f"{prefix}/complaint_restaurant_matches/run_id={run_id}"
     output_data = f"s3a://{bucket}/{output_key}/data"
     report_key = f"{output_key}/quality_report.json"
-    ensure_prefix_is_new(client, bucket, output_key)
+    previous = prepare_run_output(
+        client,
+        bucket,
+        [output_key],
+        report_key,
+        arguments.retry_incomplete,
+    )
+    if previous is not None:
+        if (
+            previous.get("inspections_silver_run_id") != inspections_run_id
+            or previous.get("complaints_silver_run_id") != complaints_run_id
+        ):
+            raise ValueError("Existing match run uses different Silver inputs.")
+        print(json.dumps(previous, indent=2, sort_keys=True))
+        return
 
     inspection_report = load_quality_report(
         client, bucket, f"{inspections_key}/quality_report.json"

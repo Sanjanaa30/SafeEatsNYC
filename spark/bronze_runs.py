@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-PRODUCTION_RUN_PREFIXES = ("initial-3y-", "scheduled__")
+PRODUCTION_RUN_PREFIXES = ("initial-3y-", "scheduled__", "phase6-e2e-")
 SOURCE_NAMES = ("dohmh_inspections", "complaints_311")
 
 
@@ -31,7 +31,7 @@ class BronzeRun:
 
 
 def is_production_run(run_id: str) -> bool:
-    """Return whether a run belongs to the historical or scheduled dataset."""
+    """Return whether a run is approved as historical, scheduled, or end-to-end."""
 
     return run_id.startswith(PRODUCTION_RUN_PREFIXES)
 

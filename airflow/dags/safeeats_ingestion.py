@@ -95,7 +95,9 @@ def ingest_source(source: SourceConfig) -> dict[str, Any]:
 @dag(
     dag_id="safeeats_ingestion",
     description="Incrementally preserve DOHMH and relevant 311 JSON in Bronze.",
-    schedule="0 10 * * *",
+    # Phase 6 schedules the complete pipeline. Keep this Bronze-only DAG for
+    # manual recovery runs so the two DAGs never download the same data daily.
+    schedule=None,
     start_date=pendulum.datetime(2026, 8, 29, tz=ZoneInfo("America/New_York")),
     catchup=False,
     max_active_runs=1,

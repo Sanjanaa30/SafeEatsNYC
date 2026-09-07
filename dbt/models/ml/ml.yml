@@ -1,0 +1,115 @@
+version: 2
+
+models:
+  - name: ml_graded_inspections
+    description: One leakage-safe graded inspection timestamp per restaurant and date.
+    columns:
+      - name: graded_inspection_key
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: inspection_date
+        data_tests: [not_null]
+      - name: grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+
+  - name: ml_inspection_targets
+    description: One prior-inspection anchor paired with its strictly later next graded inspection.
+    columns:
+      - name: prediction_anchor_key
+        data_tests: [not_null, unique]
+      - name: target_inspection_key
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: target_inspection_date
+        data_tests: [not_null]
+      - name: target_grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+      - name: target_is_bc
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+  - name: ml_training_features
+    description: Past-only restaurant history and complaint features aligned to the next graded outcome.
+    columns:
+      - name: prediction_anchor_key
+        data_tests: [not_null, unique]
+      - name: target_inspection_key
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: target_is_bc
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: previous_grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+      - name: known_graded_inspection_count
+        data_tests: [not_null]
+      - name: days_since_last_graded_inspection
+        data_tests: [not_null]
+      - name: prior_90d_nearby_complaint_count
+        data_tests: [not_null]
+
+  - name: ml_current_features
+    description: Latest past-only feature state for current restaurant risk scoring.
+    columns:
+      - name: prediction_anchor_key
+        data_tests: [not_null, unique]
+      - name: restaurant_key
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_restaurant')
+                field: restaurant_key
+      - name: camis
+        data_tests: [not_null, unique]
+      - name: scoring_date
+        data_tests: [not_null]
+      - name: previous_grade
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+      - name: days_since_last_graded_inspection
+        data_tests: [not_null]
+      - name: prior_90d_nearby_complaint_count
+        data_tests: [not_null]

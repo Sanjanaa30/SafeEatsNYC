@@ -147,6 +147,9 @@ def main() -> None:
     statements = [
         f"CREATE DATABASE IF NOT EXISTS {silver_database}",
         f"CREATE DATABASE IF NOT EXISTS {gold_database}",
+        # Recreate only the Athena metadata so it points at this pipeline run.
+        # Dropping an external table does not delete its Parquet files in S3.
+        f"DROP TABLE IF EXISTS {silver_database}.inspections",
         external_table_sql(
             silver_database,
             "inspections",
@@ -155,6 +158,7 @@ def main() -> None:
             inspection_location,
         ),
         f"MSCK REPAIR TABLE {silver_database}.inspections",
+        f"DROP TABLE IF EXISTS {silver_database}.complaints",
         external_table_sql(
             silver_database,
             "complaints",
@@ -175,4 +179,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

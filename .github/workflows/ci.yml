@@ -1,0 +1,64 @@
+name: SafeEats CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install project dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Run Python tests
+        run: python -m pytest tests -q
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install Ruff
+        run: python -m pip install --disable-pip-version-check ruff==0.13.2
+      - name: Check Python for critical lint errors
+        run: ruff check . --select E9,F63,F7,F82 --exclude .venv
+
+  dbt-parse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SAFEEATS_S3_BUCKET: safeeats-ci-placeholder
+      AWS_PROFILE: safeeats-ci-no-credentials
+      AWS_REGION: us-east-1
+      ATHENA_WORKGROUP: primary
+      ATHENA_DBT_SCHEMA: safeeats_gold_ci
+      DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+      AWS_EC2_METADATA_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dbt parser dependencies
+        run: python -m pip install --disable-pip-version-check -r warehouse/requirements.txt
+      - name: Parse dbt project without contacting AWS
+        working-directory: dbt
+        run: dbt parse --profiles-dir . --no-partial-parse

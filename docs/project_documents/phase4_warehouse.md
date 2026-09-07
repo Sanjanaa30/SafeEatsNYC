@@ -616,7 +616,10 @@ commands remain useful while learning or troubleshooting a particular layer.
 - [x] Six dimensions are available.
 - [x] Two facts are available.
 - [x] Chain and confirmed-fast-food classifications remain independent.
-- [x] Reviewed co-brand arrays are preserved.
+- [x] Reviewed co-brand arrays are preserved.Phase 4 fact/dimension tables
+            ↓
+ml_graded_inspections
+42,824 graded res
 - [x] Six dashboard marts are available.
 - [x] Raw totals and normalized metrics are both available.
 - [x] All 119 dbt tests pass.

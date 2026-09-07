@@ -18,7 +18,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the database connection string for Airflow's metadata database.
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow # Specifies the result backend for Celery tasks, using the same PostgreSQL database as Airflow's metadata.
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0 # Specifies the Redis broker URL for Celery task messages.
-    AIRFLOW__CELERY__WORKER_CONCURRENCY: "2" # Keeps enough Docker memory available for local PySpark jobs.
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: "1" # Leaves enough Docker memory for one reliable local PySpark job.
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-safeeats_local_development_only} # Specifies the JWT secret for API authentication.
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true" # Enables health checks for the Airflow scheduler.
     PYTHONPATH: /opt/safeeats # Specifies the Python path for the Airflow environment, allowing access to custom modules and scripts.
@@ -201,7 +201,7 @@ services: # Defines the services for the Docker Compose setup, including Airflow
     depends_on:
       <<: *airflow-common-depends-on
 
-  dbt: # Runs Phase 4 Athena transformations without enlarging the Airflow image.
+  dbt: # Runs Phase 4 Athena transformations directly from the command line.
     build:
       context: .
       dockerfile: warehouse/Dockerfile
@@ -219,7 +219,32 @@ services: # Defines the services for the Docker Compose setup, including Airflow
       ATHENA_WORKGROUP: ${ATHENA_WORKGROUP:-primary}
     volumes:
       - ./dbt:/usr/app
-      - ./data/reference:/usr/app/seeds:ro
+      - ./data/reference:/usr/data/reference:ro
+      - type: bind
+        source: ${USERPROFILE}/.aws
+        target: /root/.aws
+        read_only: true
+      - type: bind
+        source: ${USERPROFILE}/.aws/login/cache
+        target: /root/.aws/login/cache
+
+  ml: # Prepares and trains Phase 5 models from the Athena Gold feature table.
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    working_dir: /opt/safeeats
+    profiles: [modeling]
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE:-safeeats-dev}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_CONFIG_FILE: /root/.aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /root/.aws/credentials
+      SAFEEATS_S3_BUCKET: ${SAFEEATS_S3_BUCKET:?Set SAFEEATS_S3_BUCKET in .env}
+      ATHENA_WORKGROUP: ${ATHENA_WORKGROUP:-primary}
+      ATHENA_OUTPUT_LOCATION: ${ATHENA_OUTPUT_LOCATION:-s3://${SAFEEATS_S3_BUCKET}/athena/ml-query-results/}
+    volumes:
+      - ./:/opt/safeeats
       - type: bind
         source: ${USERPROFILE}/.aws
         target: /root/.aws

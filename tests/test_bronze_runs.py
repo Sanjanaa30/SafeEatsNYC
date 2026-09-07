@@ -55,6 +55,7 @@ def add_run(
 def test_production_run_policy() -> None:
     assert is_production_run("initial-3y-dohmh-20260830-v1")
     assert is_production_run("scheduled__2026-08-30T14:00:00+00:00")
+    assert is_production_run("phase6-e2e-20260906-v1")
     assert not is_production_run("incremental-dohmh-20260830-v1")
     assert not is_production_run("airflow-s3-success-20260830-v1")
 
@@ -64,6 +65,7 @@ def test_selects_only_successful_non_empty_production_runs(tmp_path: Path) -> No
     create_audit_database(database_path)
     add_run(database_path, "initial-3y-dohmh-20260830-v1")
     add_run(database_path, "scheduled__2026-08-30T14:00:00+00:00")
+    add_run(database_path, "phase6-e2e-20260906-v1")
     add_run(database_path, "incremental-dohmh-20260830-v1")
     add_run(database_path, "scheduled__failed", status="FAILED")
     add_run(database_path, "scheduled__empty", rows_received=0)
@@ -72,6 +74,7 @@ def test_selects_only_successful_non_empty_production_runs(tmp_path: Path) -> No
 
     assert [run.run_id for run in selected] == [
         "initial-3y-dohmh-20260830-v1",
+        "phase6-e2e-20260906-v1",
         "scheduled__2026-08-30T14:00:00+00:00",
     ]
     assert selected[0].page_glob == (

@@ -21,6 +21,7 @@ from spark.complaint_cleaning import prepare_complaints, split_complaints
 from spark.complaint_deduplication import deduplicate_complaints
 from spark.schemas import COMPLAINT_311_RAW_SCHEMA
 from spark.session import create_spark_session
+from spark.run_safety import prepare_run_output
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -30,6 +31,11 @@ def parse_arguments() -> argparse.Namespace:
         description="Clean, deduplicate, and write NYC 311 Silver Parquet."
     )
     parser.add_argument("--run-id", required=True)
+    parser.add_argument(
+        "--retry-incomplete",
+        action="store_true",
+        help="Clear only this run's incomplete S3 output before retrying.",
+    )
     parser.add_argument(
         "--audit-db",
         type=Path,
@@ -75,8 +81,20 @@ def main() -> None:
     profile = os.getenv("AWS_PROFILE", "safeeats-dev")
     client = boto3.Session(profile_name=profile, region_name=region).client("s3")
     locations = s3_locations(run_id)
-    for key_name in ("ready_key", "nonspatial_key", "rejected_key"):
-        ensure_prefix_is_new(client, locations["bucket"], locations[key_name])
+    previous = prepare_run_output(
+        client,
+        locations["bucket"],
+        [
+            locations["ready_key"],
+            locations["nonspatial_key"],
+            locations["rejected_key"],
+        ],
+        locations["report_key"],
+        arguments.retry_incomplete,
+    )
+    if previous is not None:
+        print(json.dumps(previous, indent=2, sort_keys=True))
+        return
 
     spark = create_spark_session("safeeats-build-complaints-silver")
     try:
@@ -96,6 +114,7 @@ def main() -> None:
         prepared = prepare_complaints(bronze)
         deduplicated = deduplicate_complaints(prepared).cache()
         deduplicated_count = deduplicated.count()
+        bronze.unpersist()
         ready, nonspatial, rejected = split_complaints(deduplicated)
         ready.cache()
         nonspatial.cache()
@@ -103,6 +122,7 @@ def main() -> None:
         ready_count = ready.count()
         nonspatial_count = nonspatial.count()
         rejected_count = rejected.count()
+        deduplicated.unpersist()
         if ready_count + nonspatial_count + rejected_count != deduplicated_count:
             raise RuntimeError("The three 311 Silver outcomes do not reconcile.")
 
@@ -186,4 +206,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
