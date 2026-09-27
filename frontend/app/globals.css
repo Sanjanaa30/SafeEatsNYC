@@ -1441,6 +1441,19 @@ p {
   font-size: 0.78rem;
   font-weight: 800;
 }
+.violation-filter-control {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  max-width: 340px;
+}
+.violation-filter-control p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: right;
+}
 .violation-rate-heading span {
   color: var(--color-sage);
   font-weight: 600;

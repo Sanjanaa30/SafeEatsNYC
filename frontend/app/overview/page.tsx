@@ -49,6 +49,13 @@ const boroughSortDescriptions: Record<string, string> = {
   total_restaurants:
     "Total restaurants shows boroughs with the most active restaurant locations first.",
 };
+const criticalityDescriptions: Record<string, string> = {
+  all: "Shows critical and non-critical findings together.",
+  critical:
+    "Critical findings are more directly connected to foodborne-illness risk.",
+  non_critical:
+    "Non-critical findings cover other sanitation, maintenance, and facility requirements.",
+};
 
 function KpiIcon({ metric }: { metric: string }) {
   const paths: Record<string, React.ReactNode> = {
@@ -264,6 +271,10 @@ export default function OverviewPage() {
       Number(b.critical_findings_per_inspection || 0) -
       Number(a.critical_findings_per_inspection || 0),
   )[0];
+  const activeRestaurantCount = Number(
+    kpis.data?.items.find((item) => item.metric === "active_restaurants")
+      ?.value || 0,
+  );
   const snapshotStatus = meta.data
     ? "Warehouse snapshot"
     : meta.isError
@@ -567,55 +578,71 @@ export default function OverviewPage() {
             <p className="eyebrow">Recurring findings</p>
             <h2>Most frequent violations</h2>
             <p>
-              Top five findings across the recorded inspection history. A
-              restaurant may appear more than once.
+              Top five violations by the number of restaurants affected across
+              the recorded inspection history. Each restaurant is counted once
+              for each violation type.
             </p>
           </div>
-          <FilterSelect
-            label="Criticality"
-            value={criticality}
-            onChange={(event) => setCriticality(event.target.value)}
-          >
-            <option value="all">All violations</option>
-            <option value="critical">Critical only</option>
-            <option value="non_critical">Non-critical only</option>
-          </FilterSelect>
+          <div className="violation-filter-control">
+            <FilterSelect
+              label="Show"
+              value={criticality}
+              onChange={(event) => setCriticality(event.target.value)}
+            >
+              <option value="all">All findings</option>
+              <option value="critical">Critical findings</option>
+              <option value="non_critical">Non-critical findings</option>
+            </FilterSelect>
+            <p>{criticalityDescriptions[criticality]}</p>
+          </div>
         </div>
         <div className="violation-rate-heading">
-          Historical findings per 100 current restaurants{" "}
-          <span>Repeat findings included; the rate can exceed 100.</span>
+          Restaurants affected out of every 100 current restaurants
+          <span>This is a restaurant rate, not a count of repeat findings.</span>
         </div>
         <div className="rank-list violation-list">
-          {violations.data?.items.map((item, index) => (
-            <article key={item.violation_key}>
-              <span className="rank">{index + 1}</span>
-              <div className="violation-details">
-                <strong>{item.short_label}</strong>
-                <small>
-                  {formatNumber(item.affected_restaurant_count)} affected
-                  restaurants
-                </small>
-                <details className="violation-official">
-                  <summary>Read full DOHMH wording</summary>
-                  <p>{item.violation_description}</p>
-                </details>
-                <span className="violation-track" aria-hidden="true">
-                  <span
-                    style={{
-                      width: `${Math.min(100, (100 * Number(item.violation_count)) / Math.max(Number(violations.data.items[0]?.violation_count), 1))}%`,
-                    }}
-                  />
-                </span>
-              </div>
-              <b
-                className="violation-rate"
-                aria-label={`${formatNumber(item.violations_per_100_restaurants, 0)} historical findings per 100 current restaurants`}
-              >
-                {formatNumber(item.violations_per_100_restaurants, 0)}{" "}
-                <span>findings / 100</span>
-              </b>
-            </article>
-          ))}
+          {violations.data?.items.map((item, index) => {
+            const affectedRate = activeRestaurantCount
+              ? (100 * Number(item.affected_restaurant_count)) /
+                activeRestaurantCount
+              : null;
+            return (
+              <article key={item.violation_key}>
+                <span className="rank">{index + 1}</span>
+                <div className="violation-details">
+                  <strong>{item.short_label}</strong>
+                  <small>
+                    {formatNumber(item.affected_restaurant_count)} unique
+                    restaurants had this violation
+                  </small>
+                  <details className="violation-official">
+                    <summary>Read full DOHMH wording</summary>
+                    <p>{item.violation_description}</p>
+                  </details>
+                  <span className="violation-track" aria-hidden="true">
+                    <span
+                      style={{
+                        width: `${Math.min(100, affectedRate ?? 0)}%`,
+                      }}
+                    />
+                  </span>
+                </div>
+                <b
+                  className="violation-rate"
+                  aria-label={
+                    affectedRate == null
+                      ? "Affected restaurant rate unavailable"
+                      : `${formatNumber(affectedRate, 0)} out of every 100 current restaurants had this violation`
+                  }
+                >
+                  {affectedRate == null
+                    ? "—"
+                    : formatNumber(affectedRate, 0)}{" "}
+                  <span>of every 100 restaurants</span>
+                </b>
+              </article>
+            );
+          })}
         </div>
       </section>
       <ViolationCriticalityChart
