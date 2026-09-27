@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.dependencies import get_restaurant_service, get_risk_score_service
 from api.routers.errors import safely
-from api.schemas.dashboard import RecordResponse, RiskCollectionResponse, RiskRecord
+from api.schemas.dashboard import (
+    CollectionResponse,
+    RecordResponse,
+    RiskCollectionResponse,
+    RiskRecord,
+)
 from api.services.restaurants import RestaurantService
 from api.services.risk import RiskScoreService
 from api.services.sql import normalized_borough, validated_key
@@ -45,6 +50,16 @@ def top_risk(
         page=1,
         page_size=limit,
     )
+
+
+@router.get("/grade-trends", response_model=CollectionResponse)
+def grade_trends(
+    restaurant_service: RestaurantService = Depends(get_restaurant_service),
+) -> CollectionResponse:
+    """Return annual A/B/C shares for historical context."""
+
+    rows = safely(restaurant_service.grade_trends)
+    return CollectionResponse(items=rows, total=len(rows))
 
 
 @router.get("/restaurants", response_model=RiskCollectionResponse)

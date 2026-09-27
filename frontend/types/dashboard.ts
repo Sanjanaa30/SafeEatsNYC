@@ -228,6 +228,13 @@ export interface RiskFactor {
   contribution: number;
   direction?: string;
 }
+export interface GradeTrendPoint {
+  year: number;
+  grade: "A" | "B" | "C";
+  restaurant_count: number;
+  graded_restaurants: number;
+  grade_percent: number;
+}
 export interface RiskRecord {
   restaurant_key: string;
   restaurant_id: string | null;

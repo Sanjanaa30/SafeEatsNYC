@@ -8,6 +8,7 @@ import type {
   ApiRecord,
   BoroughCorrelation,
   CorrelationSummary,
+  GradeTrendPoint,
   History,
   Restaurant,
   RiskRecord,
@@ -55,6 +56,9 @@ describe("published dashboard snapshot", () => {
       "/correlation/borough-ranking",
       { weeks: 26, lag_weeks: 2, complaint_type: "ALL" },
     );
+    const gradeTrends = await fetchSnapshot<ApiCollection<GradeTrendPoint>>(
+      "/risk/grade-trends",
+    );
 
     expect(kpis.items).toHaveLength(6);
     expect(boroughs.items).toHaveLength(5);
@@ -62,6 +66,8 @@ describe("published dashboard snapshot", () => {
     expect(weekly.items).toHaveLength(26);
     expect(summary.observations).toBe(26);
     expect(ranking.items).toHaveLength(5);
+    expect(gradeTrends.items).toHaveLength(12);
+    expect(gradeTrends.items.map((row) => row.grade_percent)).toContain(93.8);
   });
 
   it("supports finder filters and restaurant modal data", async () => {

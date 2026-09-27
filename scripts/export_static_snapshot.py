@@ -257,6 +257,8 @@ def main() -> None:
         restaurant = restaurant_by_key.get(score["restaurant_key"], {})
         risk_rows.append({**score, **restaurant})
 
+    grade_trends = restaurant_service.grade_trends()
+
     chains, _ = chain_service.search(
         query=None, borough=None, confirmed_fast_food_only=False
     )
@@ -301,6 +303,7 @@ def main() -> None:
     write_json(OUTPUT_DIR / "restaurants.json", restaurants)
     write_json(OUTPUT_DIR / "chains.json", chains)
     write_json(OUTPUT_DIR / "risk.json", risk_rows)
+    write_json(OUTPUT_DIR / "risk-grade-trends.json", grade_trends)
     write_json(OUTPUT_DIR / "recently-improved.json", recently_improved)
 
     history_chunks = chunk_by_key(export_history(), "restaurant_key")

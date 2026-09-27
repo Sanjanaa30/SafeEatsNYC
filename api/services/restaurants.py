@@ -217,6 +217,53 @@ class RestaurantService:
             """
         )
 
+    def grade_trends(self) -> list[dict[str, Any]]:
+        """Summarize one latest graded inspection per restaurant and year."""
+
+        return self.athena.query(
+            """
+            with yearly_ranked as (
+                select
+                    year(inspection_date) as grade_year,
+                    restaurant_key,
+                    grade,
+                    row_number() over (
+                        partition by restaurant_key, year(inspection_date)
+                        order by inspection_date desc, inspection_id desc
+                    ) as year_rank
+                from mart_restaurant_grade_history
+                where grade in ('A', 'B', 'C')
+                  and year(inspection_date) >= year(current_date) - 3
+            ), yearly_latest as (
+                select grade_year, restaurant_key, grade
+                from yearly_ranked
+                where year_rank = 1
+            ), yearly_counts as (
+                select
+                    grade_year,
+                    grade,
+                    count(*) as restaurant_count
+                from yearly_latest
+                group by grade_year, grade
+            )
+            select
+                grade_year as year,
+                grade,
+                restaurant_count,
+                sum(restaurant_count) over (
+                    partition by grade_year
+                ) as graded_restaurants,
+                round(
+                    100.0 * restaurant_count
+                    / sum(restaurant_count) over (partition by grade_year),
+                    2
+                ) as grade_percent
+            from yearly_counts
+            order by grade_year, grade
+            """,
+            cache_key="restaurant-grade-trends",
+        )
+
     def violations(self, restaurant_key: str, limit: int) -> list[dict[str, Any]]:
         key = validated_key(restaurant_key, "Restaurant key")
         return self.athena.query(

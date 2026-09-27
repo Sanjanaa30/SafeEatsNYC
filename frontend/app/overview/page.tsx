@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { FilterSelect, ModernSelect } from "@/components/ui/controls";
+import { ModernSelect } from "@/components/ui/controls";
 import { ErrorState, LoadingCards } from "@/components/ui/data-states";
 import { PageHeading } from "@/components/ui/page-heading";
 import { ViolationCriticalityChart } from "@/components/overview/violation-criticality-chart";
@@ -56,6 +56,11 @@ const criticalityDescriptions: Record<string, string> = {
   non_critical:
     "Non-critical findings cover other sanitation, maintenance, and facility requirements.",
 };
+const criticalityOptions = [
+  { value: "all", label: "All findings" },
+  { value: "critical", label: "Critical findings" },
+  { value: "non_critical", label: "Non-critical findings" },
+];
 
 function KpiIcon({ metric }: { metric: string }) {
   const paths: Record<string, React.ReactNode> = {
@@ -584,18 +589,17 @@ export default function OverviewPage() {
             </p>
           </div>
           <div className="violation-filter-control">
-            <FilterSelect
+            <ModernSelect
               label="Show"
               value={criticality}
-              onChange={(event) => setCriticality(event.target.value)}
-            >
-              <option value="all">All findings</option>
-              <option value="critical">Critical findings</option>
-              <option value="non_critical">Non-critical findings</option>
-            </FilterSelect>
-            <p>{criticalityDescriptions[criticality]}</p>
+              options={criticalityOptions}
+              onChange={setCriticality}
+            />
           </div>
         </div>
+        <p className="violation-filter-explanation">
+          {criticalityDescriptions[criticality]}
+        </p>
         <div className="violation-rate-heading">
           Restaurants affected out of every 100 current restaurants
           <span>This is a restaurant rate, not a count of repeat findings.</span>

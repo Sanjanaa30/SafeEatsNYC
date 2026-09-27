@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
+import { GradeTrendChart } from "@/components/charts/grade-trend-chart";
 import { GradeBadge, RiskBadge } from "@/components/ui/badges";
 import { FilterSelect, SearchField } from "@/components/ui/controls";
 import {
@@ -20,6 +21,7 @@ import type {
   ApiCollection,
   ApiRecord,
   Metadata,
+  GradeTrendPoint,
   RiskFactor,
   RiskRecord,
 } from "@/types/dashboard";
@@ -85,6 +87,15 @@ function RiskPageContent() {
           page,
           page_size: 20,
         },
+        signal,
+      ),
+  });
+  const gradeTrends = useQuery({
+    queryKey: ["risk-grade-trends"],
+    queryFn: ({ signal }) =>
+      fetchApi<ApiCollection<GradeTrendPoint>>(
+        "/risk/grade-trends",
+        {},
         signal,
       ),
   });
@@ -163,6 +174,36 @@ function RiskPageContent() {
           <option value="HIGH">Needs attention</option>
         </FilterSelect>
       </div>
+      <section className="section-block grade-trend-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Historical context</p>
+            <h2>Grade trends by year</h2>
+            <p>
+              Each restaurant is counted once per year using its latest graded
+              inspection in that year.
+            </p>
+          </div>
+          <p>Recorded inspection grades, not model predictions.</p>
+        </div>
+        <div className="grade-trend-surface">
+          {gradeTrends.isLoading ? (
+            <LoadingState label="Loading grade trends" />
+          ) : gradeTrends.isError ? (
+            <ErrorState retry={() => gradeTrends.refetch()} />
+          ) : gradeTrends.data?.items.length ? (
+            <>
+              <GradeTrendChart rows={gradeTrends.data.items} />
+              <p className="grade-trend-note">
+                <strong>Coverage:</strong> 2023 begins Aug 30. The 2026 line
+                runs through Sep 23, so these two years are partial.
+              </p>
+            </>
+          ) : (
+            <EmptyState message="No annual grade history is available." />
+          )}
+        </div>
+      </section>
       <section className="section-block">
         <div className="section-heading">
           <div>

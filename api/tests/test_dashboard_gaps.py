@@ -112,6 +112,20 @@ def test_restaurant_search_matches_name_id_address_zip_and_borough_terms() -> No
     assert "not r.is_chain" not in normalized
 
 
+def test_grade_trends_use_one_latest_grade_per_restaurant_and_year() -> None:
+    athena = CapturingAthena(
+        [[{"year": 2026, "grade": "A", "restaurant_count": 10}]]
+    )
+
+    rows = RestaurantService(athena).grade_trends()
+
+    normalized = " ".join(athena.queries[0].lower().split())
+    assert rows[0]["grade"] == "A"
+    assert "partition by restaurant_key, year(inspection_date)" in normalized
+    assert "where year_rank = 1" in normalized
+    assert "partition by grade_year" in normalized
+
+
 def test_citywide_kpis_have_six_explicit_definitions() -> None:
     metrics = [
         "active_restaurants",

@@ -3,6 +3,7 @@ import type {
   ApiRecord,
   BoroughCorrelation,
   CorrelationSummary,
+  GradeTrendPoint,
   History,
   NearbyRestaurant,
   Restaurant,
@@ -518,6 +519,10 @@ export async function fetchSnapshot<T>(path: string, params: Params = {}): Promi
   }
 
   if (path === "/risk/restaurants") return (await riskEndpoint(params)) as T;
+  if (path === "/risk/grade-trends") {
+    const rows = await loadJson<GradeTrendPoint[]>("risk-grade-trends.json");
+    return collection(rows) as T;
+  }
   const riskMatch = path.match(/^\/risk\/restaurants\/([^/]+)$/);
   if (riskMatch) {
     const rows = await loadJson<RiskRecord[]>("risk.json");

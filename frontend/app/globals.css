@@ -1442,17 +1442,26 @@ p {
   font-weight: 800;
 }
 .violation-filter-control {
-  display: grid;
-  justify-items: end;
-  gap: 7px;
-  max-width: 340px;
+  width: min(100%, 290px);
+  flex: 0 0 290px;
 }
-.violation-filter-control p {
-  margin: 0;
+.violation-filter-control .modern-select {
+  width: 100%;
+  min-width: 0;
+}
+.violation-filter-control .modern-select-menu {
+  right: 0;
+  left: auto;
+}
+.violation-filter-explanation {
+  margin: -6px 0 16px;
+  padding: 10px 14px;
+  border: 1px solid rgba(135, 160, 137, 0.2);
+  border-radius: 12px;
+  background: rgba(240, 245, 237, 0.72);
   color: var(--color-text-secondary);
-  font-size: 0.76rem;
-  line-height: 1.4;
-  text-align: right;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 .violation-rate-heading span {
   color: var(--color-sage);
@@ -3688,6 +3697,109 @@ p {
   margin: -25px 0 28px;
   border-left-color: var(--color-terracotta);
 }
+.grade-trend-section .section-heading > div > p:last-child {
+  margin-top: 8px;
+}
+.grade-trend-surface {
+  padding: 24px 26px 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-soft);
+}
+.grade-trend-chart-wrap {
+  min-width: 0;
+}
+.grade-trend-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.grade-trend-gridline {
+  stroke: rgba(95, 111, 132, 0.17);
+  stroke-width: 1;
+}
+.grade-trend-axis-label,
+.grade-trend-year-label,
+.grade-trend-axis-title {
+  fill: var(--color-text-secondary);
+  font-family: var(--font-body), "DM Sans", sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+}
+.grade-trend-axis-title {
+  font-size: 10px;
+}
+.grade-trend-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.grade-trend-point {
+  fill: currentColor;
+  stroke: #fff;
+  stroke-width: 3;
+  cursor: help;
+  transition: r 0.15s ease, filter 0.15s ease;
+}
+.grade-trend-point:hover,
+.grade-trend-point:focus-visible {
+  r: 9px;
+  filter: drop-shadow(0 3px 5px rgba(17, 24, 39, 0.2));
+  outline: none;
+}
+.grade-trend-series.grade-a {
+  color: #12a976;
+}
+.grade-trend-series.grade-b {
+  color: #e79a13;
+}
+.grade-trend-series.grade-c {
+  color: #e85061;
+}
+.grade-trend-legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.grade-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.grade-trend-legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.grade-trend-legend .grade-a {
+  background: #12a976;
+}
+.grade-trend-legend .grade-b {
+  background: #e79a13;
+}
+.grade-trend-legend .grade-c {
+  background: #e85061;
+}
+.grade-trend-note {
+  margin: 14px 0 0;
+  padding-top: 13px;
+  border-top: 1px solid rgba(95, 111, 132, 0.14);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.grade-trend-note strong {
+  color: var(--color-text);
+}
 .risk-layout {
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
 }
@@ -4066,6 +4178,14 @@ p {
   :root {
     --header-height: 68px;
   }
+  .grade-trend-surface {
+    padding: 18px 12px 14px;
+    border-radius: 18px;
+  }
+  .grade-trend-axis-label,
+  .grade-trend-year-label {
+    font-size: 14px;
+  }
   .header-inner,
   .footer-inner,
   .shell {
@@ -4290,6 +4410,17 @@ p {
   .violation-rate-heading {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+  .violation-filter-control {
+    width: 100%;
+    flex-basis: auto;
+  }
+  .violation-filter-control .modern-select-menu {
+    right: auto;
+    left: 0;
+  }
+  .violation-filter-explanation {
+    margin-top: -8px;
   }
   .violation-criticality-chart {
     padding: 19px;
