@@ -6,6 +6,7 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
+    "snapshot:export": "python ../scripts/export_static_snapshot.py",
     "lint": "eslint .",
     "test": "vitest run"
   },

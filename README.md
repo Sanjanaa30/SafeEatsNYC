@@ -535,6 +535,45 @@ docker-compose stop api frontend
 
 This stops the containers without deleting saved Docker volumes.
 
+## Free Vercel deployment
+
+The public portfolio build does not need FastAPI or live AWS access. It reads
+an exported warehouse snapshot from `frontend/public/data/snapshot/`.
+
+### 1. Refresh the deployment snapshot
+
+Start the local API, sign in to AWS, activate the project environment, and run:
+
+~~~powershell
+python scripts/export_static_snapshot.py
+~~~
+
+The export copies dashboard-ready data only. It does not change or delete the
+Athena or S3 source data.
+
+### 2. Check the production build
+
+~~~powershell
+Set-Location frontend
+npm run test
+npm run lint
+npm run build
+Set-Location ..
+~~~
+
+Development continues to use FastAPI. Production builds use the published JSON
+snapshot by default. Set `NEXT_PUBLIC_DATA_SOURCE=api` only when a production
+build should call FastAPI instead.
+
+### 3. Deploy from GitHub
+
+Import the repository into Vercel, choose the free Hobby plan, and set the
+project root directory to `frontend`. No AWS credentials or API URL are needed
+for the snapshot deployment.
+
+To publish fresher data later, rerun the export, commit the changed snapshot
+files, and push them to GitHub.
+
 ## Optional: run the full Airflow pipeline
 
 The dashboard can run without Airflow. Use these commands only when refreshing
