@@ -3697,6 +3697,45 @@ p {
   margin: -25px 0 28px;
   border-left-color: var(--color-terracotta);
 }
+.risk-full-analysis {
+  scroll-margin-top: calc(var(--header-height) + 24px);
+  margin-bottom: var(--space-section);
+}
+.risk-full-analysis-surface {
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-soft);
+}
+.risk-restaurant-link {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.risk-restaurant-link strong {
+  text-decoration: underline;
+  text-decoration-color: rgba(155, 72, 47, 0.28);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.risk-restaurant-link:hover strong,
+.risk-restaurant-link:focus-visible strong {
+  color: var(--color-terracotta);
+  text-decoration-color: currentColor;
+}
+.risk-restaurant-link:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid rgba(155, 72, 47, 0.18);
+  outline-offset: 4px;
+}
 .grade-trend-section .section-heading > div > p:last-child {
   margin-top: 8px;
 }
@@ -4180,6 +4219,10 @@ p {
   }
   .grade-trend-surface {
     padding: 18px 12px 14px;
+    border-radius: 18px;
+  }
+  .risk-full-analysis-surface {
+    padding: 18px 14px;
     border-radius: 18px;
   }
   .grade-trend-axis-label,

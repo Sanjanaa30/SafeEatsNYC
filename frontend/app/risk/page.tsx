@@ -51,7 +51,7 @@ function RiskPageContent() {
   const [sort, setSort] = useState("risk");
   const [direction, setDirection] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const [selectedKey, setSelectedKey] = useState(linkedRestaurant);
+  const [modalRestaurantKey, setModalRestaurantKey] = useState("");
   useEffect(() => {
     const timer = setTimeout(
       () => setSearch(query.trim().length >= 2 ? query.trim() : ""),
@@ -99,20 +99,31 @@ function RiskPageContent() {
         signal,
       ),
   });
-  const effectiveKey = selectedKey;
-  const detail = useQuery({
-    queryKey: ["risk-detail", effectiveKey],
+  const linkedDetail = useQuery({
+    queryKey: ["risk-full-analysis", linkedRestaurant],
     queryFn: ({ signal }) =>
       fetchApi<ApiRecord<RiskRecord>>(
-        `/risk/restaurants/${effectiveKey}`,
+        `/risk/restaurants/${linkedRestaurant}`,
         {},
         signal,
       ),
-    enabled: !!effectiveKey,
+    enabled: !!linkedRestaurant,
   });
-  const selected =
-    detail.data?.data ??
-    risks.data?.items.find((x) => x.restaurant_key === effectiveKey);
+  const modalDetail = useQuery({
+    queryKey: ["risk-modal", modalRestaurantKey],
+    queryFn: ({ signal }) =>
+      fetchApi<ApiRecord<RiskRecord>>(
+        `/risk/restaurants/${modalRestaurantKey}`,
+        {},
+        signal,
+      ),
+    enabled: !!modalRestaurantKey,
+  });
+  const modalRestaurant =
+    modalDetail.data?.data ??
+    risks.data?.items.find(
+      (restaurant) => restaurant.restaurant_key === modalRestaurantKey,
+    );
   const changeSort = (key: string) => {
     if (sort === key)
       setDirection((value) => (value === "asc" ? "desc" : "asc"));
@@ -136,6 +147,34 @@ function RiskPageContent() {
           not establish that a restaurant is unsafe.
         </span>
       </aside>
+      {linkedRestaurant ? (
+        <section
+          className="section-block risk-full-analysis"
+          id="full-risk-analysis"
+        >
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Full risk analysis</p>
+              <h2>
+                {linkedDetail.data?.data.restaurant_name ??
+                  "Restaurant risk analysis"}
+              </h2>
+            </div>
+            <p>This analysis was opened from the restaurant Finder.</p>
+          </div>
+          <div className="risk-full-analysis-surface">
+            {linkedDetail.isLoading ? (
+              <LoadingState label="Loading risk analysis" />
+            ) : linkedDetail.isError ? (
+              <ErrorState retry={() => linkedDetail.refetch()} />
+            ) : linkedDetail.data?.data ? (
+              <RiskAnalysisContent selected={linkedDetail.data.data} />
+            ) : (
+              <EmptyState message="No risk analysis is available for this restaurant." />
+            )}
+          </div>
+        </section>
+      ) : null}
       <div className="filter-panel">
         <SearchField
           label="Restaurant name or ID"
@@ -210,7 +249,7 @@ function RiskPageContent() {
             <p className="eyebrow">Current scores</p>
             <h2>Restaurant risk table</h2>
           </div>
-          <p>Select a row to explain its score.</p>
+          <p>Select a restaurant name to open its analysis.</p>
         </div>
         {risks.isLoading ? (
           <LoadingState />
@@ -222,7 +261,6 @@ function RiskPageContent() {
               caption="Current restaurant risk scores"
               rows={risks.data.items}
               rowKey={(x) => x.restaurant_key}
-              onRow={(x) => setSelectedKey(x.restaurant_key)}
               sort={sort}
               direction={direction}
               onSort={changeSort}
@@ -232,13 +270,17 @@ function RiskPageContent() {
                   label: "Restaurant",
                   sortKey: "name",
                   render: (x) => (
-                    <>
+                    <button
+                      className="risk-restaurant-link"
+                      type="button"
+                      onClick={() => setModalRestaurantKey(x.restaurant_key)}
+                      aria-label={`Open risk analysis for ${x.restaurant_name}`}
+                    >
                       <strong>{x.restaurant_name}</strong>
-                      <br />
                       <small>
                         {x.borough_name} · {x.cuisine}
                       </small>
-                    </>
+                    </button>
                   ),
                 },
                 {
@@ -277,12 +319,12 @@ function RiskPageContent() {
         )}
       </section>
       <RiskAnalysisModal
-        selected={selected}
-        loading={detail.isLoading}
-        error={detail.isError}
-        retry={() => detail.refetch()}
-        open={!!selectedKey}
-        onClose={() => setSelectedKey("")}
+        selected={modalRestaurant}
+        loading={modalDetail.isLoading}
+        error={modalDetail.isError}
+        retry={() => modalDetail.refetch()}
+        open={!!modalRestaurantKey}
+        onClose={() => setModalRestaurantKey("")}
       />
     </main>
   );
@@ -314,64 +356,70 @@ function RiskAnalysisModal({
       ) : error ? (
         <ErrorState retry={retry} />
       ) : selected ? (
-        <div className="risk-modal-content">
-          <header>
-            <div>
-              <span>{selected.cuisine || "Cuisine unavailable"}</span>
-              <span>{selected.borough_name || "Borough unavailable"}</span>
-            </div>
-            <p>{selected.address || "Address unavailable"}</p>
-          </header>
-          <div className="risk-visuals">
-            <div className="risk-score-panel">
-              <RiskGauge
-                probability={selected.risk_probability}
-                category={selected.risk_category}
-              />
-              <div className="badge-row">
-                <GradeBadge grade={selected.current_grade} />
-                <RiskBadge category={selected.risk_category} />
-              </div>
-            </div>
-            <DrivingFactors factors={selected.main_contributing_factors} />
-          </div>
-          <section className="risk-guide">
-            <h2>How to read the score</h2>
-            <div>
-              <div className="risk-scale">
-                <span>
-                  <i className="low" />
-                  Lower risk
-                </span>
-                <span>
-                  <i className="moderate" />
-                  Watch
-                </span>
-                <span>
-                  <i className="high" />
-                  Needs attention
-                </span>
-              </div>
-              <p>
-                <strong>Needs attention</strong> is the stricter alert.{" "}
-                <strong>Watch</strong> means the restaurant may deserve review;
-                it does not mean the restaurant is unsafe.
-              </p>
-              <p>
-                This XGBoost estimate predicts a possible future B or C grade.
-                Official DOHMH inspection results remain the trusted source.
-              </p>
-            </div>
-          </section>
-          <p className="fine-print">
-            Model {selected.model_version} · scored{" "}
-            {formatDate(selected.scoring_timestamp)}
-          </p>
-        </div>
+        <RiskAnalysisContent selected={selected} />
       ) : (
         <EmptyState message="No risk analysis is available for this restaurant." />
       )}
     </Modal>
+  );
+}
+
+function RiskAnalysisContent({ selected }: { selected: RiskRecord }) {
+  return (
+    <div className="risk-modal-content">
+      <header>
+        <div>
+          <span>{selected.cuisine || "Cuisine unavailable"}</span>
+          <span>{selected.borough_name || "Borough unavailable"}</span>
+        </div>
+        <p>{selected.address || "Address unavailable"}</p>
+      </header>
+      <div className="risk-visuals">
+        <div className="risk-score-panel">
+          <RiskGauge
+            probability={selected.risk_probability}
+            category={selected.risk_category}
+          />
+          <div className="badge-row">
+            <GradeBadge grade={selected.current_grade} />
+            <RiskBadge category={selected.risk_category} />
+          </div>
+        </div>
+        <DrivingFactors factors={selected.main_contributing_factors} />
+      </div>
+      <section className="risk-guide">
+        <h2>How to read the score</h2>
+        <div>
+          <div className="risk-scale">
+            <span>
+              <i className="low" />
+              Lower risk
+            </span>
+            <span>
+              <i className="moderate" />
+              Watch
+            </span>
+            <span>
+              <i className="high" />
+              Needs attention
+            </span>
+          </div>
+          <p>
+            <strong>Needs attention</strong> is the stricter alert.{" "}
+            <strong>Watch</strong> means the restaurant may deserve review; it
+            does not mean the restaurant is unsafe.
+          </p>
+          <p>
+            This XGBoost estimate predicts a possible future B or C grade.
+            Official DOHMH inspection results remain the trusted source.
+          </p>
+        </div>
+      </section>
+      <p className="fine-print">
+        Model {selected.model_version} · scored{" "}
+        {formatDate(selected.scoring_timestamp)}
+      </p>
+    </div>
   );
 }
 
