@@ -937,13 +937,12 @@ The final verification confirmed:
    not directly predict food poisoning, closure, or a specific violation.
 4. **Contributing factors are associations, not causes.** They help explain the
    model calculation but do not prove why a restaurant receives a grade.
-5. **The deployed model is not automatically retrained by Airflow.** The Phase
-   6 DAG refreshes Silver, Gold, and dbt feature tables, but the final model and
-   current-risk score artifacts remain on their previous version until the
-   controlled Phase 5 training workflow is run again.
-6. **Model quality can drift.** Grade policy, inspection timing, complaint
-   patterns, and restaurant populations can change. Metrics and calibration
-   must be checked again after every retraining cycle.
+5. **Airflow refreshes the model monthly.** The refresh uses a 45-day outcome
+   maturity delay, chronological backtesting, and verification before a new
+   score artifact can be promoted.
+6. **Model quality can drift.** Every refresh checks calibration, overall
+   quality, borough consistency, and risk-tier distribution. A failed hard gate
+   blocks promotion; warnings remain visible in the monitoring report.
 7. **XGBoost is less transparent than logistic regression.** The logistic
    baseline and comparison report are retained for audit and explanation.
 

@@ -253,6 +253,5 @@ traceback without that report is failure.
   location for every complaint date.
 - The threshold should receive a larger manually labelled validation sample
   before causal or enforcement use.
-- Silver is not automatically scheduled yet. The later full-DAG work must add
-  retry-safe immutable-output handling before Airflow runs these jobs daily.
-
+- The original Phase 3 verification ran these jobs manually. The Phase 6 daily
+  pipeline now schedules them with retry-safe immutable output handling.

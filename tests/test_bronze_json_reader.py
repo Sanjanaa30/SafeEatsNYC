@@ -6,7 +6,6 @@ import json
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
 from pyspark.sql import SparkSession
@@ -42,9 +41,11 @@ def test_multiline_reader_reads_each_object_in_bronze_array(tmp_path) -> None:
     )
 
     try:
-        rows = read_bronze_json(
-            spark, str(bronze_page), DOHMH_RAW_SCHEMA
-        ).orderBy("camis").collect()
+        rows = (
+            read_bronze_json(spark, str(bronze_page), DOHMH_RAW_SCHEMA)
+            .orderBy("camis")
+            .collect()
+        )
     finally:
         spark.stop()
 

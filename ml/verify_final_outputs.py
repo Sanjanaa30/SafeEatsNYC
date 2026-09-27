@@ -47,7 +47,9 @@ def main() -> None:
         "scoring_timestamp",
     }
     if required - set(scores.columns):
-        raise ValueError(f"Missing score columns: {sorted(required - set(scores.columns))}")
+        raise ValueError(
+            f"Missing score columns: {sorted(required - set(scores.columns))}"
+        )
     if len(scores) != report["eligible_restaurants_scored"]:
         raise ValueError("Parquet row count does not match the scoring report.")
     if not scores["restaurant_id"].is_unique:
@@ -58,7 +60,9 @@ def main() -> None:
         raise ValueError("Unexpected risk category found.")
     if scores[list(required)].isna().any().any():
         raise ValueError("Required score output contains null values.")
-    factor_counts = scores["main_contributing_factors"].map(lambda value: len(json.loads(value)))
+    factor_counts = scores["main_contributing_factors"].map(
+        lambda value: len(json.loads(value))
+    )
     if (factor_counts == 0).any():
         raise ValueError("Some restaurants have no contributing factors.")
     if set(scores["model_version"]) != {bundle["model_version"]}:

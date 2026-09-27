@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pyspark.sql import DataFrame, Window, functions as F
+from pyspark.sql import DataFrame, Window
+from pyspark.sql import functions as F
 
 from spark.schemas import DOHMH_RAW_SCHEMA
-
 
 DOHMH_SOURCE_COLUMNS = tuple(DOHMH_RAW_SCHEMA.fieldNames())
 

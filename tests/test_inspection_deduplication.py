@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
-from pyspark.sql import SparkSession, functions as F
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from spark.inspection_deduplication import deduplicate_inspections
 from spark.schemas import DOHMH_RAW_SCHEMA

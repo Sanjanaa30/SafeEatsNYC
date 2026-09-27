@@ -8,8 +8,12 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-
-PRODUCTION_RUN_PREFIXES = ("initial-3y-", "scheduled__", "phase6-e2e-")
+PRODUCTION_RUN_PREFIXES = (
+    "initial-3y-",
+    "scheduled__",
+    "phase6-e2e-",
+    "manual_latest_",
+)
 SOURCE_NAMES = ("dohmh_inspections", "complaints_311")
 
 
@@ -31,7 +35,7 @@ class BronzeRun:
 
 
 def is_production_run(run_id: str) -> bool:
-    """Return whether a run is approved as historical, scheduled, or end-to-end."""
+    """Return whether a run is an approved historical or dashboard refresh."""
 
     return run_id.startswith(PRODUCTION_RUN_PREFIXES)
 
@@ -73,9 +77,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=Path(
-            os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")
-        ),
+        default=Path(os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")),
     )
     return parser.parse_args()
 

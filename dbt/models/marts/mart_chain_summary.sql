@@ -4,6 +4,7 @@ select
     chains.location_count,
     chains.borough_count,
     chains.is_confirmed_fast_food,
+    array_sort(array_distinct(array_agg(restaurants.cuisine))) as cuisines,
     array_sort(array_distinct(array_agg(boroughs.borough_name))) as boroughs_present,
     array_sort(
         array_distinct(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
 from pyspark.sql import SparkSession
@@ -78,4 +77,3 @@ def test_complaints_are_cleaned_and_split_without_losing_valid_records(
         "INVALID_CREATED_DATE",
         "IRRELEVANT_COMPLAINT_TYPE",
     }
-

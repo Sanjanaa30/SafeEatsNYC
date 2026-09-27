@@ -1,7 +1,11 @@
 import pandas as pd
 import pytest
 
-from ml.prepare_training_data import MODEL_FEATURES, convert_types, validate_leakage_boundary
+from ml.prepare_training_data import (
+    MODEL_FEATURES,
+    convert_types,
+    validate_leakage_boundary,
+)
 
 
 def example_frame() -> pd.DataFrame:

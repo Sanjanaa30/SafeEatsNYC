@@ -17,10 +17,11 @@ select
     score,
     nullif(trim(upper(grade)), '') as grade,
     inspection_type,
+    nullif(trim(action), '') as inspection_action,
+    record_date,
     latitude,
     longitude,
     coordinate_status,
     inspection_year,
     inspection_month
 from {{ source('silver', 'inspections') }}
-

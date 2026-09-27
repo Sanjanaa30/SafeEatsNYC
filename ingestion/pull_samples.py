@@ -1,10 +1,4 @@
-# The script asks for 1,000 most recent inspection/violation rows from the NYC Open Data portal for Phase 1 exploration.
-
-# 1,000 most recent relevant 311 records
-# It keeps exactly the three complaint types identified in the plan:
-# - Food Poisoning
-# - Rodent
-# - Food Establishment
+"""Download small inspection and food-related 311 samples for exploration."""
 
 import json
 import os
@@ -13,7 +7,6 @@ from typing import Any
 
 import requests
 from dotenv import load_dotenv
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_DIRECTORY = PROJECT_ROOT / "data" / "samples"
@@ -49,7 +42,9 @@ def build_headers() -> dict[str, str]:
     return headers
 
 
-def download_sample(url: str, query_parameters: dict[str, Any], headers: dict[str, str]) -> list[dict[str, Any]]:
+def download_sample(
+    url: str, query_parameters: dict[str, Any], headers: dict[str, str]
+) -> list[dict[str, Any]]:
     """Request a small JSON sample from a Socrata endpoint."""
 
     response = requests.get(url, params=query_parameters, headers=headers, timeout=60)
@@ -92,21 +87,26 @@ def main() -> None:
     complaint_parameters = {
         "$limit": SAMPLE_SIZE,
         "$where": (
-            "complaint_type in "
-            "('Food Poisoning', 'Rodent', 'Food Establishment')"
+            "complaint_type in ('Food Poisoning', 'Rodent', 'Food Establishment')"
         ),
         "$order": "created_date DESC",
     }
 
     print("Downloading DOHMH inspection sample...")
 
-    inspection_records = download_sample(INSPECTION_API_URL, inspection_parameters, headers)
+    inspection_records = download_sample(
+        INSPECTION_API_URL, inspection_parameters, headers
+    )
 
     print("Downloading filtered 311 complaint sample...")
 
-    complaint_records = download_sample(COMPLAINT_API_URL, complaint_parameters, headers)
+    complaint_records = download_sample(
+        COMPLAINT_API_URL, complaint_parameters, headers
+    )
 
-    returned_complaint_types = {record.get("complaint_type") for record in complaint_records}
+    returned_complaint_types = {
+        record.get("complaint_type") for record in complaint_records
+    }
     unexpected_complaint_types = returned_complaint_types - RELEVANT_COMPLAINT_TYPES
 
     if unexpected_complaint_types:

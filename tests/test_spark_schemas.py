@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
 from pyspark.sql.types import ArrayType, DoubleType, StringType, StructType

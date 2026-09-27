@@ -14,19 +14,23 @@ import boto3
 import joblib
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 from scipy import sparse
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-
 NUMERIC_FEATURES = [
     "previous_score",
     "earlier_score",
     "recent_score_change",
+    "latest_score_worsened",
+    "days_between_last_two_graded_inspections",
+    "recent_3_inspection_avg_score",
+    "recent_3_critical_violation_count",
+    "recent_3_inspections_with_critical",
     "days_since_last_graded_inspection",
     "previous_inspection_violation_count",
     "previous_inspection_critical_violation_count",
@@ -135,7 +139,9 @@ def convert_types(frame: pd.DataFrame) -> pd.DataFrame:
     frame["target_inspection_date"] = pd.to_datetime(
         frame["target_inspection_date"], errors="raise"
     )
-    frame["target_is_bc"] = pd.to_numeric(frame["target_is_bc"], errors="raise").astype("int8")
+    frame["target_is_bc"] = pd.to_numeric(frame["target_is_bc"], errors="raise").astype(
+        "int8"
+    )
 
     boolean_values = {
         "true": 1.0,
@@ -146,6 +152,7 @@ def convert_types(frame: pd.DataFrame) -> pd.DataFrame:
     boolean_columns = {
         "previous_inspection_had_critical_violation",
         "historical_grades_consistent",
+        "latest_score_worsened",
     }
     for column in NUMERIC_FEATURES:
         if column in boolean_columns:
@@ -189,7 +196,10 @@ def build_preprocessor() -> ColumnTransformer:
         ]
     )
     return ColumnTransformer(
-        [("numeric", numeric, NUMERIC_FEATURES), ("categorical", categorical, CATEGORICAL_FEATURES)]
+        [
+            ("numeric", numeric, NUMERIC_FEATURES),
+            ("categorical", categorical, CATEGORICAL_FEATURES),
+        ]
     )
 
 
@@ -225,6 +235,8 @@ def metadata_bytes(frame: pd.DataFrame) -> bytes:
         "target_inspection_date",
         "target_grade",
         "target_is_bc",
+        "borough_name",
+        "cuisine",
     ]
     return gzip.compress(frame[columns].to_csv(index=False).encode("utf-8"))
 
@@ -262,7 +274,9 @@ def main() -> None:
         if error.response["Error"]["Code"] not in {"404", "NoSuchKey"}:
             raise
     else:
-        raise FileExistsError(f"Preparation run already exists: s3://{bucket}/{base_key}")
+        raise FileExistsError(
+            f"Preparation run already exists: s3://{bucket}/{base_key}"
+        )
 
     frame = convert_types(
         read_athena_table(
@@ -279,7 +293,9 @@ def main() -> None:
     train = frame[frame["target_inspection_date"] < cutoff].copy()
     test = frame[frame["target_inspection_date"] >= cutoff].copy()
     if train.empty or test.empty:
-        raise ValueError("The selected date cutoff produced an empty train or test set.")
+        raise ValueError(
+            "The selected date cutoff produced an empty train or test set."
+        )
     if train["target_inspection_date"].max() >= test["target_inspection_date"].min():
         raise ValueError("The chronological train/test boundary overlaps.")
 
@@ -313,8 +329,14 @@ def main() -> None:
         "source": f"{arguments.database}.{arguments.table}",
         "source_rows": int(len(frame)),
         "test_start_date": cutoff.date().isoformat(),
-        "train_target_date_min": train["target_inspection_date"].min().date().isoformat(),
-        "train_target_date_max": train["target_inspection_date"].max().date().isoformat(),
+        "train_target_date_min": train["target_inspection_date"]
+        .min()
+        .date()
+        .isoformat(),
+        "train_target_date_max": train["target_inspection_date"]
+        .max()
+        .date()
+        .isoformat(),
         "test_target_date_min": test["target_inspection_date"].min().date().isoformat(),
         "test_target_date_max": test["target_inspection_date"].max().date().isoformat(),
         "train": class_summary(train["target_is_bc"]),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from contextlib import suppress
 
 from pyspark.sql import functions as F
 
@@ -78,9 +79,7 @@ def main() -> None:
             .when(F.col("nearest_candidate_distance_meters") <= 100, "75-100m")
             .when(F.col("nearest_candidate_distance_meters") <= 150, "100-150m")
             .otherwise("OVER 150m"),
-        ).groupBy("distance_band").count().orderBy("distance_band").show(
-            truncate=False
-        )
+        ).groupBy("distance_band").count().orderBy("distance_band").show(truncate=False)
         print("Matched examples:")
         matched.filter(F.col("restaurant_match_status") == "MATCHED").select(
             "unique_key",
@@ -91,12 +90,9 @@ def main() -> None:
             F.round("match_distance_meters", 1).alias("distance_meters"),
         ).orderBy("match_distance_meters").show(20, truncate=False)
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":
     main()
-

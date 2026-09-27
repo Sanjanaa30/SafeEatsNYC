@@ -6,19 +6,21 @@ import argparse
 import json
 import os
 import re
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+from pyspark import StorageLevel
+
 from spark.bronze_io import read_bronze_json
 from spark.bronze_runs import select_bronze_runs
 from spark.inspection_cleaning import clean_inspections
 from spark.inspection_deduplication import deduplicate_inspections
+from spark.run_safety import prepare_run_output
 from spark.schemas import DOHMH_RAW_SCHEMA
 from spark.session import create_spark_session
-from spark.run_safety import prepare_run_output
-
 
 SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -38,9 +40,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=Path(
-            os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")
-        ),
+        default=Path(os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")),
     )
     return parser.parse_args()
 
@@ -82,9 +82,7 @@ def ensure_prefix_is_new(client, bucket: str, prefix: str) -> None:
         MaxKeys=1,
     )
     if response.get("KeyCount", 0):
-        raise FileExistsError(
-            f"Silver run already exists: s3://{bucket}/{prefix}/"
-        )
+        raise FileExistsError(f"Silver run already exists: s3://{bucket}/{prefix}/")
 
 
 def grouped_counts(frame, column_name: str) -> dict[str, int]:
@@ -146,7 +144,7 @@ def main() -> None:
             spark,
             [run.page_glob for run in runs],
             DOHMH_RAW_SCHEMA,
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
         raw_count = bronze.count()
         expected_raw_count = sum(run.rows_received for run in runs)
         if raw_count != expected_raw_count:
@@ -155,12 +153,12 @@ def main() -> None:
                 f"read {raw_count}, expected {expected_raw_count}."
             )
 
-        deduplicated = deduplicate_inspections(bronze).cache()
+        deduplicated = deduplicate_inspections(bronze).persist(StorageLevel.DISK_ONLY)
         deduplicated_count = deduplicated.count()
         bronze.unpersist()
         accepted, rejected = clean_inspections(deduplicated)
-        accepted.cache()
-        rejected.cache()
+        accepted.persist(StorageLevel.DISK_ONLY)
+        rejected.persist(StorageLevel.DISK_ONLY)
         accepted_count = accepted.count()
         rejected_count = rejected.count()
         deduplicated.unpersist()
@@ -171,13 +169,9 @@ def main() -> None:
             "inspection_year", "inspection_month"
         ).parquet(locations["accepted_data"])
         if rejected_count:
-            rejected.write.mode("errorifexists").parquet(
-                locations["rejected_data"]
-            )
+            rejected.write.mode("errorifexists").parquet(locations["rejected_data"])
 
-        accepted_readback_count = spark.read.parquet(
-            locations["accepted_data"]
-        ).count()
+        accepted_readback_count = spark.read.parquet(locations["accepted_data"]).count()
         rejected_readback_count = (
             spark.read.parquet(locations["rejected_data"]).count()
             if rejected_count
@@ -201,15 +195,11 @@ def main() -> None:
             "rejected_rows": rejected_count,
             "accepted_readback_rows": accepted_readback_count,
             "rejected_readback_rows": rejected_readback_count,
-            "coordinate_status_counts": grouped_counts(
-                accepted, "coordinate_status"
-            ),
+            "coordinate_status_counts": grouped_counts(accepted, "coordinate_status"),
             "inspection_date_status_counts": grouped_counts(
                 accepted, "inspection_date_status"
             ),
-            "output_path": locations["accepted_data"].replace(
-                "s3a://", "s3://", 1
-            ),
+            "output_path": locations["accepted_data"].replace("s3a://", "s3://", 1),
             "rejected_output_path": (
                 locations["rejected_data"].replace("s3a://", "s3://", 1)
                 if rejected_count
@@ -225,10 +215,8 @@ def main() -> None:
         )
         print(json.dumps(report, indent=2, sort_keys=True))
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

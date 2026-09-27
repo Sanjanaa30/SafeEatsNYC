@@ -1,26 +1,4 @@
-"""
-SQLite-backed ingestion audit state and incremental watermarks.
-
-What it does:
-This script acts as the logbook and memory tracker for your ingestion pipeline. 
-Instead of relying on memory or guessing when data was last downloaded, it uses a local SQLite database (ingestion_audit.db) to record every single run, 
-track whether it succeeded or failed, and remember the watermark (the latest timestamp successfully downloaded) so future runs know where to pick up incrementally.
-
-You run an ingestion command
-             ↓
-cli.py receives --audit-db
-             ↓
-pipeline.py starts the ingestion
-             ↓
-audit.py creates a RUNNING record
-             ↓
-API pages are downloaded into S3 Bronze
-             ↓
-Did the load finish?
-  ├── Yes → audit record becomes SUCCESS
-  └── No  → audit record becomes FAILED with error details
-
-"""
+"""SQLite-backed ingestion audit state and incremental watermarks."""
 
 from __future__ import annotations
 
@@ -29,8 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-# AuditRecord: A clean, immutable data structure that holds all details about a specific run—such as when it started, how many rows were received, how many pages were downloaded, 
-# its final status (RUNNING, SUCCESS, or FAILED), and any error messages if it crashed.
+
 @dataclass(frozen=True)
 class AuditRecord:
     """One source execution within a logical pipeline run."""
@@ -48,14 +25,7 @@ class AuditRecord:
     status: str
     error_message: str | None
 
-"""
-__init__() & _connect(): Automatically creates the audit database folder/file if it doesn't exist. It also enables WAL mode (Write-Ahead Logging) and busy timeouts, which prevent database lockups if multiple tasks try to read or write at the same time.
-_initialize(): Creates the ingestion_audit table with strict safety rules:
-Uses a primary key combining run_id and source_name.
-Restricts the status field so it can only ever be RUNNING, SUCCESS, or FAILED.
-Builds a database index (idx_audit_success_watermark) to make finding the latest successful date lightning-fast.
 
-"""
 class AuditStore:
     """Persist audit records safely across independent ingestion tasks."""
 

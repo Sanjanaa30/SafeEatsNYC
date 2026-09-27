@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from contextlib import suppress
 from pathlib import Path
 
 from spark.bronze_io import read_bronze_json
@@ -24,9 +25,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=Path(
-            os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")
-        ),
+        default=Path(os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")),
     )
     return parser.parse_args()
 
@@ -75,12 +74,9 @@ def main() -> None:
             "longitude",
         ).show(10, truncate=False)
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":
     main()
-

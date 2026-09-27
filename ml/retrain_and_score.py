@@ -8,6 +8,8 @@ import io
 import json
 import os
 import time
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 
 import boto3
@@ -21,10 +23,16 @@ from scipy import sparse
 from sklearn.linear_model import LogisticRegression
 
 from ml.calibration import PlattCalibratedModel
-from ml.prepare_training_data import CATEGORICAL_FEATURES, MODEL_FEATURES, NUMERIC_FEATURES
+from ml.compare_xgboost import model as xgboost_model
+from ml.prepare_training_data import (
+    CATEGORICAL_FEATURES,
+    MODEL_FEATURES,
+    NUMERIC_FEATURES,
+)
 from ml.train_logistic_regression import risk_categories, select_risk_thresholds
 from ml.tune_calibrate_logistic import date_folds, load_numpy, load_rows, load_sparse
-from ml.compare_xgboost import model as xgboost_model
+
+DOHMH_ACTIVE_RESTAURANTS_URL = "https://data.cityofnewyork.us/resource/43nn-pn8j.json"
 
 
 def arguments() -> argparse.Namespace:
@@ -34,7 +42,9 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--final-model-run-id", required=True)
     parser.add_argument("--score-run-id", required=True)
     parser.add_argument("--mature-through-date", default="2026-07-31")
-    parser.add_argument("--current-feature-table", default="safeeats_gold.ml_current_features")
+    parser.add_argument(
+        "--current-feature-table", default="safeeats_gold.ml_current_features"
+    )
     parser.add_argument(
         "--replace",
         action="store_true",
@@ -53,7 +63,9 @@ def upload(s3, bucket: str, key: str, body: bytes, content_type: str) -> None:
 
 def wait_for_athena(client, query_id: str) -> None:
     while True:
-        status = client.get_query_execution(QueryExecutionId=query_id)["QueryExecution"]["Status"]
+        status = client.get_query_execution(QueryExecutionId=query_id)[
+            "QueryExecution"
+        ]["Status"]
         if status["State"] == "SUCCEEDED":
             return
         if status["State"] in {"FAILED", "CANCELLED"}:
@@ -61,7 +73,9 @@ def wait_for_athena(client, query_id: str) -> None:
         time.sleep(1)
 
 
-def read_current_features(client, table: str, workgroup: str, output: str) -> pd.DataFrame:
+def read_current_features(
+    client, table: str, workgroup: str, output: str
+) -> pd.DataFrame:
     query = client.start_query_execution(
         QueryString=f"SELECT * FROM {table} ORDER BY camis",
         WorkGroup=workgroup,
@@ -84,12 +98,38 @@ def read_current_features(client, table: str, workgroup: str, output: str) -> pd
     return pd.DataFrame(records, columns=columns)
 
 
+def read_active_restaurant_ids() -> set[str]:
+    """Read the current official DOHMH population before producing predictions."""
+    query = urllib.parse.urlencode(
+        {
+            "$select": "camis",
+            "$group": "camis",
+            "$order": "camis",
+            "$limit": "50000",
+        }
+    )
+    request = urllib.request.Request(f"{DOHMH_ACTIVE_RESTAURANTS_URL}?{query}")
+    app_token = os.getenv("NYC_OPEN_DATA_APP_TOKEN")
+    if app_token:
+        request.add_header("X-App-Token", app_token)
+    with urllib.request.urlopen(request, timeout=90) as response:
+        rows = json.load(response)
+    active_ids = {str(row["camis"]) for row in rows if row.get("camis")}
+    if len(active_ids) < 20_000:
+        raise RuntimeError(
+            "The official DOHMH active-restaurant snapshot was unexpectedly small; "
+            "refusing to publish incomplete predictions."
+        )
+    return active_ids
+
+
 def convert_current_features(frame: pd.DataFrame) -> pd.DataFrame:
     frame = frame.copy()
     boolean_values = {"true": 1.0, "false": 0.0, "1": 1.0, "0": 0.0}
     boolean_columns = {
         "previous_inspection_had_critical_violation",
         "historical_grades_consistent",
+        "latest_score_worsened",
     }
     for column in NUMERIC_FEATURES:
         if column in boolean_columns:
@@ -101,13 +141,17 @@ def convert_current_features(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def fit_oof_calibrated_model(features, labels: np.ndarray, dates: pd.Series, parameters: dict):
+def fit_oof_calibrated_model(
+    features, labels: np.ndarray, dates: pd.Series, parameters: dict
+):
     oof_probabilities = []
     oof_labels = []
     for train_mask, validation_mask in date_folds(dates, splits=5):
         fold_model = xgboost_model(parameters)
         fold_model.fit(features[train_mask], labels[train_mask])
-        oof_probabilities.append(fold_model.predict_proba(features[validation_mask])[:, 1])
+        oof_probabilities.append(
+            fold_model.predict_proba(features[validation_mask])[:, 1]
+        )
         oof_labels.append(labels[validation_mask])
 
     raw_oof = np.concatenate(oof_probabilities)
@@ -118,7 +162,9 @@ def fit_oof_calibrated_model(features, labels: np.ndarray, dates: pd.Series, par
     final_base_model = xgboost_model(parameters)
     final_base_model.fit(features, labels)
     calibrated_model = PlattCalibratedModel(final_base_model, calibrator)
-    calibrated_oof = calibrator.predict_proba(PlattCalibratedModel.logits(raw_oof))[:, 1]
+    calibrated_oof = calibrator.predict_proba(PlattCalibratedModel.logits(raw_oof))[
+        :, 1
+    ]
     return calibrated_model, calibrated_oof, calibration_labels
 
 
@@ -126,7 +172,9 @@ def readable_feature(name: str) -> str:
     return name.replace("numeric__", "").replace("categorical__", "").replace("_", " ")
 
 
-def contributing_factors(base_model, features, feature_names: list[str], count: int = 3) -> list[str]:
+def contributing_factors(
+    base_model, features, feature_names: list[str], count: int = 3
+) -> list[str]:
     contributions = base_model.get_booster().predict(
         xgb.DMatrix(features), pred_contribs=True
     )[:, :-1]
@@ -169,7 +217,10 @@ def main() -> None:
     final_key = f"ml/final_models/run_id={selected.final_model_run_id}"
     score_key = f"ml/current_scores/run_id={selected.score_run_id}"
 
-    for marker in [f"{final_key}/training_report.json", f"{score_key}/scoring_report.json"]:
+    for marker in [
+        f"{final_key}/training_report.json",
+        f"{score_key}/scoring_report.json",
+    ]:
         try:
             s3.head_object(Bucket=bucket, Key=marker)
         except ClientError as error:
@@ -191,12 +242,18 @@ def main() -> None:
     x_test = load_sparse(s3, bucket, f"{prepared}/X_test.npz")
     y_test = load_numpy(s3, bucket, f"{prepared}/y_test.npy")
     test_rows = load_rows(s3, bucket, f"{prepared}/test_rows.csv.gz")
-    mature = (test_rows["target_inspection_date"] <= pd.Timestamp(selected.mature_through_date)).to_numpy()
+    mature = (
+        test_rows["target_inspection_date"]
+        <= pd.Timestamp(selected.mature_through_date)
+    ).to_numpy()
 
     historical_x = sparse.vstack([x_train, x_test[mature]], format="csr")
     historical_y = np.concatenate([y_train, y_test[mature]])
     historical_dates = pd.concat(
-        [train_rows["target_inspection_date"], test_rows.loc[mature, "target_inspection_date"]],
+        [
+            train_rows["target_inspection_date"],
+            test_rows.loc[mature, "target_inspection_date"],
+        ],
         ignore_index=True,
     )
     calibrated_model, oof_probabilities, oof_labels = fit_oof_calibrated_model(
@@ -204,11 +261,22 @@ def main() -> None:
     )
     moderate, high = select_risk_thresholds(oof_labels, oof_probabilities)
 
-    preprocessor = joblib.load(io.BytesIO(read(s3, bucket, f"{prepared}/preprocessor.joblib")))
+    preprocessor = joblib.load(
+        io.BytesIO(read(s3, bucket, f"{prepared}/preprocessor.joblib"))
+    )
     feature_names = json.loads(read(s3, bucket, f"{prepared}/feature_names.json"))
     current = convert_current_features(
-        read_current_features(athena, selected.current_feature_table, workgroup, athena_output)
+        read_current_features(
+            athena, selected.current_feature_table, workgroup, athena_output
+        )
     )
+    warehouse_eligible_count = len(current)
+    active_restaurant_ids = read_active_restaurant_ids()
+    current = current[current["camis"].astype(str).isin(active_restaurant_ids)].copy()
+    if current.empty:
+        raise RuntimeError(
+            "No current feature rows matched the official DOHMH snapshot."
+        )
     current_x = preprocessor.transform(current[MODEL_FEATURES])
     probabilities = calibrated_model.predict_proba(current_x)[:, 1]
     categories = risk_categories(probabilities, moderate, high)
@@ -250,7 +318,12 @@ def main() -> None:
         "model_version": selected.final_model_run_id,
         "scoring_timestamp": scoring_timestamp,
         "eligible_restaurants_scored": int(len(scores)),
-        "risk_category_counts": {key: int(value) for key, value in category_counts.items()},
+        "warehouse_eligible_restaurants": int(warehouse_eligible_count),
+        "inactive_restaurants_excluded": int(warehouse_eligible_count - len(scores)),
+        "active_population_source": DOHMH_ACTIVE_RESTAURANTS_URL,
+        "risk_category_counts": {
+            key: int(value) for key, value in category_counts.items()
+        },
         "mean_risk_probability": round(float(probabilities.mean()), 6),
         "output_path": f"s3://{bucket}/{score_key}/current_restaurant_risk_scores.parquet",
     }
@@ -266,23 +339,32 @@ def main() -> None:
     parquet = io.BytesIO()
     scores.to_parquet(parquet, index=False)
     artifacts = {
-        f"{final_key}/model_bundle.joblib": (model_bytes(bundle), "application/octet-stream"),
+        f"{final_key}/model_bundle.joblib": (
+            model_bytes(bundle),
+            "application/octet-stream",
+        ),
         f"{final_key}/training_report.json": (
-            json.dumps(training_report, indent=2).encode("utf-8"), "application/json"
+            json.dumps(training_report, indent=2).encode("utf-8"),
+            "application/json",
         ),
         f"{score_key}/current_restaurant_risk_scores.parquet": (
-            parquet.getvalue(), "application/vnd.apache.parquet"
+            parquet.getvalue(),
+            "application/vnd.apache.parquet",
         ),
         f"{score_key}/current_restaurant_risk_scores.csv.gz": (
-            gzip.compress(scores.to_csv(index=False).encode("utf-8")), "application/gzip"
+            gzip.compress(scores.to_csv(index=False).encode("utf-8")),
+            "application/gzip",
         ),
         f"{score_key}/scoring_report.json": (
-            json.dumps(scoring_report, indent=2).encode("utf-8"), "application/json"
+            json.dumps(scoring_report, indent=2).encode("utf-8"),
+            "application/json",
         ),
     }
     for key, (body, content_type) in artifacts.items():
         upload(s3, bucket, key, body, content_type)
-    print(json.dumps({"training": training_report, "scoring": scoring_report}, indent=2))
+    print(
+        json.dumps({"training": training_report, "scoring": scoring_report}, indent=2)
+    )
 
 
 if __name__ == "__main__":

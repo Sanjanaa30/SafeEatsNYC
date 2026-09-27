@@ -1,8 +1,8 @@
 """
 Initial SafeEats daily ingestion DAG: two independent source tasks.
 
-This script defines the automated Airflow Directed Acyclic Graph (DAG) that orchestrates your daily data downloads. 
-It tells Airflow how and when to run your ingestion pipeline for both restaurant inspections and 311 complaints in 
+This script defines the automated Airflow Directed Acyclic Graph (DAG) that orchestrates your daily data downloads.
+It tells Airflow how and when to run your ingestion pipeline for both restaurant inspections and 311 complaints in
 parallel, handling retries, schedules, and logging automatically.
 
 """
@@ -23,7 +23,6 @@ from ingestion.audit import AuditStore
 from ingestion.pipeline import run_ingestion, utc_now
 from ingestion.sources import COMPLAINTS_311, DOHMH_INSPECTIONS, SourceConfig
 from ingestion.storage import BronzeStorage, LocalBronzeStorage, S3BronzeStorage
-
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(os.getenv("SAFEEATS_PROJECT_ROOT", "/opt/safeeats"))
@@ -84,9 +83,7 @@ def ingest_source(source: SourceConfig) -> dict[str, Any]:
         audit_database=AUDIT_DATABASE,
         page_size=int(os.getenv("SAFEEATS_INGESTION_PAGE_SIZE", "10000")),
         overlap_days=int(os.getenv("SAFEEATS_OVERLAP_DAYS", "2")),
-        initial_lookback_days=int(
-            os.getenv("SAFEEATS_INITIAL_LOOKBACK_DAYS", "1095")
-        ),
+        initial_lookback_days=int(os.getenv("SAFEEATS_INITIAL_LOOKBACK_DAYS", "1095")),
         app_token=os.getenv("NYC_OPEN_DATA_APP_TOKEN"),
     )
     return AuditStore.as_dict(result)
@@ -123,10 +120,7 @@ def safeeats_ingestion():
     def ingestion_complete(results: list[dict[str, Any]]) -> None:
         LOGGER.info(
             "Ingestion complete: %s",
-            {
-                result["source_name"]: result["rows_received"]
-                for result in results
-            },
+            {result["source_name"]: result["rows_received"] for result in results},
         )
 
     ingestion_complete([ingest_inspections(), ingest_311()])

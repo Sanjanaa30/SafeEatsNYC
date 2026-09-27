@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from contextlib import suppress
 from datetime import datetime, timezone
 
 import boto3
+from pyspark import StorageLevel
+from pyspark.sql import functions as F
+
 from spark.build_inspections_silver import (
-    ensure_prefix_is_new,
     grouped_counts,
     validated_run_id,
     write_report,
@@ -20,9 +23,8 @@ from spark.geospatial_matching import (
     current_restaurant_locations,
     nearest_restaurant_matches,
 )
-from spark.session import create_spark_session
 from spark.run_safety import prepare_run_output
-from pyspark.sql import functions as F
+from spark.session import create_spark_session
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -93,8 +95,7 @@ def main() -> None:
     inspections_key = f"{prefix}/inspections/run_id={inspections_run_id}"
     complaints_key = f"{prefix}/complaints_311/run_id={complaints_run_id}"
     nonspatial_key = (
-        f"{prefix}/complaints_311_without_valid_coordinates/"
-        f"run_id={complaints_run_id}"
+        f"{prefix}/complaints_311_without_valid_coordinates/run_id={complaints_run_id}"
     )
     output_key = f"{prefix}/complaint_restaurant_matches/run_id={run_id}"
     output_data = f"s3a://{bucket}/{output_key}/data"
@@ -126,25 +127,29 @@ def main() -> None:
     try:
         inspections = spark.read.parquet(
             f"s3a://{bucket}/{inspections_key}/data"
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
         complaints = spark.read.parquet(
             f"s3a://{bucket}/{complaints_key}/data"
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
         nonspatial = spark.read.parquet(
             f"s3a://{bucket}/{nonspatial_key}/data"
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
 
         inspection_count = inspections.count()
         complaint_count = complaints.count()
         nonspatial_count = nonspatial.count()
         if inspection_count != inspection_report["accepted_rows"]:
-            raise RuntimeError("Inspection Silver input count does not match its report.")
+            raise RuntimeError(
+                "Inspection Silver input count does not match its report."
+            )
         if complaint_count != complaint_report["geospatial_ready_rows"]:
             raise RuntimeError("Spatial 311 input count does not match its report.")
         if nonspatial_count != complaint_report["without_valid_coordinates_rows"]:
             raise RuntimeError("Non-spatial 311 input count does not match its report.")
 
-        restaurants = current_restaurant_locations(inspections).cache()
+        restaurants = current_restaurant_locations(inspections).persist(
+            StorageLevel.DISK_ONLY
+        )
         restaurant_count = restaurants.count()
         matched_spatial = nearest_restaurant_matches(
             complaints,
@@ -155,7 +160,7 @@ def main() -> None:
             matched_spatial,
             nonspatial,
             arguments.threshold_meters,
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
         final_count = final.count()
         expected_final_count = complaint_count + nonspatial_count
         if final_count != expected_final_count:
@@ -170,7 +175,9 @@ def main() -> None:
         ).parquet(output_data)
         readback_count = spark.read.parquet(output_data).count()
         if readback_count != final_count:
-            raise RuntimeError("Geospatial match Parquet read-back count does not match.")
+            raise RuntimeError(
+                "Geospatial match Parquet read-back count does not match."
+            )
 
         report = {
             "silver_run_id": run_id,
@@ -185,22 +192,16 @@ def main() -> None:
             "complaints_without_valid_coordinates": nonspatial_count,
             "final_rows": final_count,
             "readback_rows": readback_count,
-            "match_status_counts": grouped_counts(
-                final, "restaurant_match_status"
-            ),
-            "threshold_validation_counts": threshold_validation_counts(
-                matched_spatial
-            ),
+            "match_status_counts": grouped_counts(final, "restaurant_match_status"),
+            "threshold_validation_counts": threshold_validation_counts(matched_spatial),
             "output_path": output_data.replace("s3a://", "s3://", 1),
             "status": "SUCCESS",
         }
         write_report(client, bucket, report_key, report)
         print(json.dumps(report, indent=2, sort_keys=True))
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

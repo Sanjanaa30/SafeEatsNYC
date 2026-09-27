@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pyspark.sql import DataFrame, Window, functions as F
-
+from pyspark.sql import DataFrame, Window
+from pyspark.sql import functions as F
 
 EARTH_RADIUS_METERS = 6_371_008.8
 GRID_SIZE_DEGREES = 0.002
@@ -52,12 +52,9 @@ def haversine_distance_meters(
     longitude_delta = F.radians(second_longitude - first_longitude)
     first_latitude_radians = F.radians(first_latitude)
     second_latitude_radians = F.radians(second_latitude)
-    haversine_value = (
-        F.pow(F.sin(latitude_delta / 2.0), 2)
-        + F.cos(first_latitude_radians)
-        * F.cos(second_latitude_radians)
-        * F.pow(F.sin(longitude_delta / 2.0), 2)
-    )
+    haversine_value = F.pow(F.sin(latitude_delta / 2.0), 2) + F.cos(
+        first_latitude_radians
+    ) * F.cos(second_latitude_radians) * F.pow(F.sin(longitude_delta / 2.0), 2)
     safe_value = F.greatest(F.lit(0.0), F.least(F.lit(1.0), haversine_value))
     return F.lit(2.0 * EARTH_RADIUS_METERS) * F.asin(F.sqrt(safe_value))
 
@@ -98,27 +95,18 @@ def nearest_restaurant_matches(
             F.col("_longitude_cell") + F.col("_neighbor.lon"),
         )
     )
-    restaurant_cells = (
-        restaurants.withColumn(
-            "_restaurant_latitude_cell",
-            F.floor(F.col("restaurant_latitude") / F.lit(GRID_SIZE_DEGREES)),
-        )
-        .withColumn(
-            "_restaurant_longitude_cell",
-            F.floor(F.col("restaurant_longitude") / F.lit(GRID_SIZE_DEGREES)),
-        )
+    restaurant_cells = restaurants.withColumn(
+        "_restaurant_latitude_cell",
+        F.floor(F.col("restaurant_latitude") / F.lit(GRID_SIZE_DEGREES)),
+    ).withColumn(
+        "_restaurant_longitude_cell",
+        F.floor(F.col("restaurant_longitude") / F.lit(GRID_SIZE_DEGREES)),
     )
 
     candidates = complaint_cells.join(
         F.broadcast(restaurant_cells),
-        (
-            F.col("_candidate_latitude_cell")
-            == F.col("_restaurant_latitude_cell")
-        )
-        & (
-            F.col("_candidate_longitude_cell")
-            == F.col("_restaurant_longitude_cell")
-        ),
+        (F.col("_candidate_latitude_cell") == F.col("_restaurant_latitude_cell"))
+        & (F.col("_candidate_longitude_cell") == F.col("_restaurant_longitude_cell")),
         "inner",
     ).withColumn(
         "nearest_candidate_distance_meters",
@@ -191,18 +179,13 @@ def add_unmatched_nonspatial_complaints(
     unmatched = (
         nonspatial.withColumn("restaurant_camis", F.lit(None).cast("string"))
         .withColumn("matched_restaurant_name", F.lit(None).cast("string"))
-        .withColumn(
-            "matched_restaurant_name_normalized", F.lit(None).cast("string")
-        )
+        .withColumn("matched_restaurant_name_normalized", F.lit(None).cast("string"))
         .withColumn("matched_restaurant_address", F.lit(None).cast("string"))
         .withColumn("restaurant_latitude", F.lit(None).cast("double"))
         .withColumn("restaurant_longitude", F.lit(None).cast("double"))
-        .withColumn(
-            "nearest_candidate_distance_meters", F.lit(None).cast("double")
-        )
+        .withColumn("nearest_candidate_distance_meters", F.lit(None).cast("double"))
         .withColumn("match_distance_meters", F.lit(None).cast("double"))
         .withColumn("restaurant_match_status", F.lit("NO_VALID_COORDINATES"))
         .withColumn("match_threshold_meters", F.lit(float(threshold_meters)))
     )
     return matched_spatial.unionByName(unmatched, allowMissingColumns=True)
-

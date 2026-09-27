@@ -34,7 +34,9 @@ class FakeS3:
 
 def test_successful_run_is_reused_without_deletion():
     report = {"status": "SUCCESS", "accepted_rows": 10}
-    client = FakeS3({"silver/x/run_id=1/quality_report.json": json.dumps(report).encode()})
+    client = FakeS3(
+        {"silver/x/run_id=1/quality_report.json": json.dumps(report).encode()}
+    )
 
     found = prepare_run_output(
         client,

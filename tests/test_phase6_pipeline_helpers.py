@@ -6,6 +6,7 @@ import pytest
 
 from orchestration.run_context import run_names, safe_run_token
 
+
 def test_airflow_run_id_becomes_s3_safe_and_deterministic():
     value = "scheduled__2026-09-06T10:00:00-04:00"
     assert safe_run_token(value) == "scheduled__2026-09-06T10_00_00-04_00"

@@ -1,9 +1,4 @@
-"""
-Bronze object storage backends for local development and Amazon S3.
-This script defines how and where your raw downloaded data files (Bronze layer) are stored. 
-It gives your ingestion pipeline two interchangeable options: saving them locally on your computer's hard drive or securely in an Amazon S3 cloud bucket.
-
-"""
+"""Bronze storage backends for local development and Amazon S3."""
 
 from __future__ import annotations
 
@@ -20,11 +15,6 @@ def s3_error_details(error: ClientError) -> tuple[str, int | None]:
     status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
     return code, status
 
-# BronzeStorage (Protocol): It dictates that any storage backend you build must have four basic methods:
-# uri(): Return the file location address.
-# exists(): Check if a file is already there.
-# read_bytes(): Read an existing file's contents.
-# write_bytes(): Save a file safely.
 
 class BronzeStorage(Protocol):
     """Minimal object operations required by the ingestion pipeline."""
@@ -41,21 +31,16 @@ class BronzeStorage(Protocol):
     def write_bytes(self, relative_key: str, content: bytes) -> None:
         """Write bytes without silently replacing different content."""
 
-# normalize_relative_key(): A helper function that cleans up file paths. 
-# It replaces Windows backslashes (\) with forward slashes (/), blocks empty paths, and prevents security tricks like .. (directory traversal) to keep your file paths clean and safe.
+
 def normalize_relative_key(relative_key: str) -> str:
     """Normalize one safe, relative object key."""
 
     normalized = relative_key.replace("\\", "/").strip("/")
-    if not normalized or any(
-        part in {"", ".", ".."} for part in normalized.split("/")
-    ):
+    if not normalized or any(part in {"", ".", ".."} for part in normalized.split("/")):
         raise ValueError("Bronze object keys must be non-empty relative paths.")
     return normalized
 
-# LocalBronzeStorage: Used for your local computer development and testing:
-# _path(): Combines your root folder with the normalized file path.
-# write_bytes(): Writes files safely using atomic patterns. If a file already exists, it checks if the content is identical. If someone tries to overwrite an existing file with different data, it throws an error to prevent data corruption.
+
 class LocalBronzeStorage:
     """Atomic local-filesystem Bronze storage used by tests and development."""
 
@@ -85,15 +70,6 @@ class LocalBronzeStorage:
         temporary_path.write_bytes(content)
         temporary_path.replace(path)
 
-# S3BronzeStorage: Used if you want to push your raw data into an AWS S3 cloud bucket:
-# Initialization: Connects using standard AWS credentials (boto3), allows custom regions/profiles, and sets up a folder prefix (like s3://my-bucket/bronze/...).
-# exists(): Checks if a file exists in S3, gracefully handling standard AWS errors (like 404 or NoSuchKey).
-# read_bytes(): Streams and downloads file contents directly from S3.
-# write_bytes(): Uploads files to S3 with enterprise security features:
-# Enables server-side encryption (AES256).
-# Automatically calculates and saves a sha256 hash signature as metadata to verify file integrity.
-# Uses an IfNoneMatch="*" condition. If the exact same file is uploaded twice, it succeeds quietly.
-# If a file with different content already exists at that path, it safely blocks it and raises an error.
 
 class S3BronzeStorage:
     """Private S3 Bronze storage using the standard boto3 credential chain."""
@@ -162,5 +138,6 @@ class S3BronzeStorage:
                     "S3 Bronze object already has different content: "
                     f"s3://{self.bucket}/{key}"
                 ) from error
+
 
 # this script is imported by pipeline.py

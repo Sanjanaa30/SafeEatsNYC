@@ -6,14 +6,12 @@ from pathlib import Path
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, StructField, StructType
 
 from spark.inspection_cleaning import clean_inspections
-
 
 REFERENCE_DIRECTORY = Path(__file__).resolve().parents[1] / "data" / "reference"
 INPUT_SCHEMA = StructType(

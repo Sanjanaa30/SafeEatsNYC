@@ -24,7 +24,6 @@ def create_audit_database(path: Path) -> None:
             )
             """
         )
-        
 
 
 def add_run(
@@ -56,6 +55,7 @@ def test_production_run_policy() -> None:
     assert is_production_run("initial-3y-dohmh-20260830-v1")
     assert is_production_run("scheduled__2026-08-30T14:00:00+00:00")
     assert is_production_run("phase6-e2e-20260906-v1")
+    assert is_production_run("manual_latest_20260926")
     assert not is_production_run("incremental-dohmh-20260830-v1")
     assert not is_production_run("airflow-s3-success-20260830-v1")
 

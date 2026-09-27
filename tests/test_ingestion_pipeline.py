@@ -19,7 +19,6 @@ from ingestion.pipeline import (
 )
 from ingestion.sources import COMPLAINTS_311, DOHMH_INSPECTIONS
 
-
 RUN_END = datetime(2026, 8, 28, 12, 0, tzinfo=timezone.utc)
 RUN_START = datetime(2026, 8, 1, 0, 0, tzinfo=timezone.utc)
 
@@ -73,12 +72,8 @@ def test_paginates_and_preserves_exact_response_pages(tmp_path: Path) -> None:
             inspection_record("2", "2026-08-03T00:00:00.000"),
         ]
     )
-    second_content = encoded(
-        [inspection_record("3", "2026-08-04T00:00:00.000")]
-    )
-    session = FakeSession(
-        [FakeResponse(first_content), FakeResponse(second_content)]
-    )
+    second_content = encoded([inspection_record("3", "2026-08-04T00:00:00.000")])
+    session = FakeSession([FakeResponse(first_content), FakeResponse(second_content)])
     bronze_root, audit_database = run_paths(tmp_path)
 
     result = run_ingestion(
@@ -105,11 +100,7 @@ def test_paginates_and_preserves_exact_response_pages(tmp_path: Path) -> None:
 def test_successful_run_id_is_idempotent(tmp_path: Path) -> None:
     bronze_root, audit_database = run_paths(tmp_path)
     first_session = FakeSession(
-        [
-            FakeResponse(
-                encoded([inspection_record("1", "2026-08-02T00:00:00.000")])
-            )
-        ]
+        [FakeResponse(encoded([inspection_record("1", "2026-08-02T00:00:00.000")]))]
     )
     first = run_ingestion(
         source=DOHMH_INSPECTIONS,
@@ -162,14 +153,10 @@ def test_failed_run_resumes_existing_pages(tmp_path: Path) -> None:
     with pytest.raises(requests.HTTPError):
         run_ingestion(**arguments, session=failing_session)  # type: ignore[arg-type]
 
-    failed = AuditStore(audit_database).get_run(
-        "retry-run", DOHMH_INSPECTIONS.name
-    )
+    failed = AuditStore(audit_database).get_run("retry-run", DOHMH_INSPECTIONS.name)
     assert failed is not None and failed.status == "FAILED"
 
-    final_page = encoded(
-        [inspection_record("3", "2026-08-04T00:00:00.000")]
-    )
+    final_page = encoded([inspection_record("3", "2026-08-04T00:00:00.000")])
     retry_session = FakeSession([FakeResponse(final_page)])
     result = run_ingestion(
         **arguments,
@@ -185,11 +172,7 @@ def test_failed_run_resumes_existing_pages(tmp_path: Path) -> None:
 def test_next_run_uses_success_watermark_and_overlap(tmp_path: Path) -> None:
     bronze_root, audit_database = run_paths(tmp_path)
     first_session = FakeSession(
-        [
-            FakeResponse(
-                encoded([inspection_record("1", "2026-08-20T00:00:00.000")])
-            )
-        ]
+        [FakeResponse(encoded([inspection_record("1", "2026-08-20T00:00:00.000")]))]
     )
     run_ingestion(
         source=DOHMH_INSPECTIONS,
@@ -235,9 +218,7 @@ def test_validation_failure_is_audited_and_not_written(tmp_path: Path) -> None:
             session=session,  # type: ignore[arg-type]
         )
 
-    record = AuditStore(audit_database).get_run(
-        "invalid", DOHMH_INSPECTIONS.name
-    )
+    record = AuditStore(audit_database).get_run("invalid", DOHMH_INSPECTIONS.name)
     assert record is not None and record.status == "FAILED"
     assert "missing required fields" in (record.error_message or "")
     assert not list(bronze_root.rglob("page_*.json"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from contextlib import suppress
 from pathlib import Path
 
 from pyspark.sql import functions as F
@@ -25,9 +26,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=Path(
-            os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")
-        ),
+        default=Path(os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")),
     )
     return parser.parse_args()
 
@@ -46,9 +45,7 @@ def main() -> None:
     spark = create_spark_session("safeeats-inspection-cleaning-preview")
     try:
         paths = [run.page_glob for run in runs]
-        bronze = read_bronze_json(spark, paths, DOHMH_RAW_SCHEMA).limit(
-            arguments.limit
-        )
+        bronze = read_bronze_json(spark, paths, DOHMH_RAW_SCHEMA).limit(arguments.limit)
         accepted, rejected = clean_inspections(bronze)
         accepted.cache()
         rejected.cache()
@@ -62,8 +59,9 @@ def main() -> None:
 
         if rejected_count:
             print("Rejection reasons:")
-            rejected.select(F.explode("rejection_reasons").alias("reason")) \
-                .groupBy("reason").count().orderBy("reason").show(truncate=False)
+            rejected.select(F.explode("rejection_reasons").alias("reason")).groupBy(
+                "reason"
+            ).count().orderBy("reason").show(truncate=False)
 
         if accepted_count == 0:
             raise RuntimeError(
@@ -71,9 +69,9 @@ def main() -> None:
             )
 
         print("Coordinate statuses:")
-        accepted.groupBy("coordinate_status").count().orderBy(
-            "coordinate_status"
-        ).show(truncate=False)
+        accepted.groupBy("coordinate_status").count().orderBy("coordinate_status").show(
+            truncate=False
+        )
 
         print("Name and address examples:")
         accepted.select(
@@ -86,10 +84,8 @@ def main() -> None:
             "score",
         ).orderBy(F.col("is_reviewed_co_brand").desc()).show(10, truncate=False)
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

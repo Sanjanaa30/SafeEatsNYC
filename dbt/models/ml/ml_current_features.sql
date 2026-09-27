@@ -9,6 +9,25 @@ with history as (
         lag(score) over (
             partition by restaurant_key order by inspection_date
         ) as earlier_score,
+        date_diff(
+            'day',
+            lag(inspection_date) over (
+                partition by restaurant_key order by inspection_date
+            ),
+            inspection_date
+        ) as days_between_last_two_graded_inspections,
+        avg(score) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_inspection_avg_score,
+        sum(critical_violation_count) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_critical_violation_count,
+        sum(case when has_critical_violation then 1 else 0 end) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_inspections_with_critical,
         row_number() over (
             partition by restaurant_key order by inspection_date
         ) as known_graded_inspection_count,
@@ -81,6 +100,11 @@ select
     latest.earlier_grade,
     latest.earlier_score,
     latest.score - latest.earlier_score as recent_score_change,
+    latest.score > latest.earlier_score as latest_score_worsened,
+    latest.days_between_last_two_graded_inspections,
+    latest.recent_3_inspection_avg_score,
+    latest.recent_3_critical_violation_count,
+    latest.recent_3_inspections_with_critical,
     date_diff(
         'day', latest.inspection_date, cast('{{ scoring_date }}' as date)
     ) as days_since_last_graded_inspection,

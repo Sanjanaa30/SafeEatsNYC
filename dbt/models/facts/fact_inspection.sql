@@ -28,5 +28,6 @@ select
     inspections.score,
     inspections.grade,
     inspections.inspection_type,
+    inspections.inspection_action,
     upper(inspections.critical_flag) = 'CRITICAL' as is_critical
 from {{ ref('stg_inspections') }} as inspections

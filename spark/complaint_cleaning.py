@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pyspark.sql import DataFrame, functions as F
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 
 from spark.inspection_cleaning import (
     NYC_LATITUDE_MAX,
@@ -12,7 +13,6 @@ from spark.inspection_cleaning import (
     cleaned_text,
     parsed_timestamp,
 )
-
 
 RELEVANT_COMPLAINT_TYPES = (
     "FOOD ESTABLISHMENT",
@@ -71,9 +71,7 @@ def prepare_complaints(frame: DataFrame) -> DataFrame:
     prepared = (
         prepared.withColumn(
             "borough",
-            F.when(borough_text == "NEW YORK", "MANHATTAN").otherwise(
-                borough_text
-            ),
+            F.when(borough_text == "NEW YORK", "MANHATTAN").otherwise(borough_text),
         )
         .withColumn(
             "borough_status",
@@ -88,26 +86,25 @@ def prepare_complaints(frame: DataFrame) -> DataFrame:
     )
 
     zip_text = cleaned_text("incident_zip_original")
-    prepared = (
-        prepared.withColumn(
-            "incident_zip",
-            F.when(
-                zip_text.rlike(r"^\d{5}(-\d{4})?$"),
-                F.substring(zip_text, 1, 5),
-            ),
-        )
-        .withColumn(
-            "incident_zip_status",
-            F.when(zip_text.isNull(), "MISSING")
-            .when(F.col("incident_zip").isNull(), "INVALID")
-            .otherwise("VALID"),
-        )
+    prepared = prepared.withColumn(
+        "incident_zip",
+        F.when(
+            zip_text.rlike(r"^\d{5}(-\d{4})?$"),
+            F.substring(zip_text, 1, 5),
+        ),
+    ).withColumn(
+        "incident_zip_status",
+        F.when(zip_text.isNull(), "MISSING")
+        .when(F.col("incident_zip").isNull(), "INVALID")
+        .otherwise("VALID"),
     )
 
     latitude_text = cleaned_text("latitude_original")
     longitude_text = cleaned_text("longitude_original")
     prepared = (
-        prepared.withColumn("_latitude_parsed", F.col("latitude_original").try_cast("double"))
+        prepared.withColumn(
+            "_latitude_parsed", F.col("latitude_original").try_cast("double")
+        )
         .withColumn("_longitude_parsed", F.col("longitude_original").try_cast("double"))
         .withColumn(
             "coordinate_status",
@@ -124,9 +121,7 @@ def prepare_complaints(frame: DataFrame) -> DataFrame:
                 "OUT_OF_RANGE",
             )
             .when(
-                ~F.col("_latitude_parsed").between(
-                    NYC_LATITUDE_MIN, NYC_LATITUDE_MAX
-                )
+                ~F.col("_latitude_parsed").between(NYC_LATITUDE_MIN, NYC_LATITUDE_MAX)
                 | ~F.col("_longitude_parsed").between(
                     NYC_LONGITUDE_MIN, NYC_LONGITUDE_MAX
                 ),
@@ -193,4 +188,3 @@ def split_complaints(
         F.col("coordinate_status") != "VALID"
     ).drop("rejection_reasons")
     return geospatial_ready, without_valid_coordinates, rejected
-

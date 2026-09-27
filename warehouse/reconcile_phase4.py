@@ -13,8 +13,8 @@ from typing import Any
 
 import boto3
 from dotenv import load_dotenv
-from spark.bronze_runs import PRODUCTION_RUN_PREFIXES
 
+from spark.bronze_runs import PRODUCTION_RUN_PREFIXES
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -147,7 +147,7 @@ def warehouse_count_query(silver_database: str, gold_database: str) -> str:
     statements.extend(
         [
             f"SELECT 'distinct_restaurant_camis', count(distinct camis) FROM {gold_database}.stg_inspections",
-            f"SELECT 'derived_chain_groups', count(*) FROM (SELECT restaurant_name_normalized FROM {gold_database}.stg_chain_flags WHERE is_chain GROUP BY restaurant_name_normalized)",
+            f"SELECT 'derived_chain_groups', count(distinct chain_key) FROM {gold_database}.stg_chain_flags WHERE is_chain AND chain_key IS NOT NULL",
             f"SELECT 'distinct_violation_codes', count(distinct violation_code) FROM {gold_database}.stg_inspections WHERE violation_code IS NOT NULL",
             f"SELECT 'distinct_complaint_types', count(distinct complaint_type) FROM {gold_database}.stg_complaints WHERE complaint_type IS NOT NULL",
         ]
@@ -234,7 +234,7 @@ def markdown(report: dict[str, Any]) -> str:
         "| Dataset | Rows | Grain |",
         "|---|---:|---|",
         f"| `dim_restaurant` | {counts['dim_restaurant']:,} | One row per CAMIS |",
-        f"| `dim_chain` | {counts['dim_chain']:,} | One row per normalized name with 3+ locations |",
+        f"| `dim_chain` | {counts['dim_chain']:,} | One row per detected chain family with 3+ locations |",
         f"| `dim_borough` | {counts['dim_borough']:,} | One row per NYC borough |",
         f"| `dim_date` | {counts['dim_date']:,} | One row per calendar day |",
         f"| `dim_violation` | {counts['dim_violation']:,} | One row per violation code |",
@@ -315,25 +315,143 @@ def main() -> None:
     )
 
     checks: list[dict[str, Any]] = []
-    check(checks, "Inspection Bronze audit versus Silver input", inspection_bronze, inspection_report["raw_rows_read"], "Only Bronze run IDs recorded by the Silver quality report are compared.")
-    check(checks, "Inspection deduplication", inspection_report["raw_rows_read"] - inspection_report["exact_duplicates_removed"], inspection_report["deduplicated_rows"], "Exact overlap duplicates are the only removed inspection rows.")
-    check(checks, "Inspection accepted plus rejected", inspection_report["deduplicated_rows"], inspection_report["accepted_rows"] + inspection_report["rejected_rows"], "Every deduplicated inspection has an explicit outcome.")
-    check(checks, "Inspection Silver Athena count", inspection_report["accepted_rows"], counts["silver_inspections"], "Athena reads every accepted Silver inspection row.")
-    check(checks, "Inspection staging count", counts["silver_inspections"], counts["staging_inspections"], "Staging is a thin view.")
-    check(checks, "Inspection fact count", counts["staging_inspections"], counts["fact_inspection"], "The fact preserves the inspection/violation grain.")
-    check(checks, "Complaint Bronze audit versus Silver input", complaint_bronze, complaint_report["raw_rows_read"], "Only Bronze run IDs recorded by the Silver quality report are compared.")
-    check(checks, "Complaint unique-key deduplication", complaint_report["raw_rows_read"] - complaint_report["duplicate_complaint_rows_removed"], complaint_report["deduplicated_rows"], "Repeated complaint IDs caused by overlap are removed.")
-    check(checks, "Complaint coordinate outcomes", complaint_report["deduplicated_rows"], complaint_report["geospatial_ready_rows"] + complaint_report["without_valid_coordinates_rows"] + complaint_report["rejected_rows"], "Every complaint has a spatial, nonspatial, or rejected outcome.")
-    check(checks, "Complaint match output", complaint_report["deduplicated_rows"], match_report["final_rows"], "Matched and unmatched complaints are both retained.")
-    check(checks, "Complaint Silver Athena count", match_report["final_rows"], counts["silver_complaints"], "Athena reads the complete geospatial match output.")
-    check(checks, "Complaint staging count", counts["silver_complaints"], counts["staging_complaints"], "Staging is a thin view.")
-    check(checks, "Complaint fact count", counts["staging_complaints"], counts["fact_311_complaint"], "The fact remains one row per complaint.")
-    check(checks, "Restaurant dimension grain", counts["distinct_restaurant_camis"], counts["dim_restaurant"], "The dimension contains one row per CAMIS.")
-    check(checks, "Chain dimension grain", counts["derived_chain_groups"], counts["dim_chain"], "The dimension contains one row per derived 3+ location group.")
-    check(checks, "Borough dimension grain", 5, counts["dim_borough"], "NYC has five borough members in scope.")
-    check(checks, "Violation dimension grain", counts["distinct_violation_codes"], counts["dim_violation"], "The dimension contains one row per non-null violation code.")
-    check(checks, "Complaint-type dimension grain", counts["distinct_complaint_types"], counts["dim_complaint_type"], "The dimension contains one row per relevant complaint type.")
-    check(checks, "Chain mart grain", counts["dim_chain"], counts["mart_chain_summary"], "The chain mart contains one row per chain.")
+    check(
+        checks,
+        "Inspection Bronze audit versus Silver input",
+        inspection_bronze,
+        inspection_report["raw_rows_read"],
+        "Only Bronze run IDs recorded by the Silver quality report are compared.",
+    )
+    check(
+        checks,
+        "Inspection deduplication",
+        inspection_report["raw_rows_read"]
+        - inspection_report["exact_duplicates_removed"],
+        inspection_report["deduplicated_rows"],
+        "Exact overlap duplicates are the only removed inspection rows.",
+    )
+    check(
+        checks,
+        "Inspection accepted plus rejected",
+        inspection_report["deduplicated_rows"],
+        inspection_report["accepted_rows"] + inspection_report["rejected_rows"],
+        "Every deduplicated inspection has an explicit outcome.",
+    )
+    check(
+        checks,
+        "Inspection Silver Athena count",
+        inspection_report["accepted_rows"],
+        counts["silver_inspections"],
+        "Athena reads every accepted Silver inspection row.",
+    )
+    check(
+        checks,
+        "Inspection staging count",
+        counts["silver_inspections"],
+        counts["staging_inspections"],
+        "Staging is a thin view.",
+    )
+    check(
+        checks,
+        "Inspection fact count",
+        counts["staging_inspections"],
+        counts["fact_inspection"],
+        "The fact preserves the inspection/violation grain.",
+    )
+    check(
+        checks,
+        "Complaint Bronze audit versus Silver input",
+        complaint_bronze,
+        complaint_report["raw_rows_read"],
+        "Only Bronze run IDs recorded by the Silver quality report are compared.",
+    )
+    check(
+        checks,
+        "Complaint unique-key deduplication",
+        complaint_report["raw_rows_read"]
+        - complaint_report["duplicate_complaint_rows_removed"],
+        complaint_report["deduplicated_rows"],
+        "Repeated complaint IDs caused by overlap are removed.",
+    )
+    check(
+        checks,
+        "Complaint coordinate outcomes",
+        complaint_report["deduplicated_rows"],
+        complaint_report["geospatial_ready_rows"]
+        + complaint_report["without_valid_coordinates_rows"]
+        + complaint_report["rejected_rows"],
+        "Every complaint has a spatial, nonspatial, or rejected outcome.",
+    )
+    check(
+        checks,
+        "Complaint match output",
+        complaint_report["deduplicated_rows"],
+        match_report["final_rows"],
+        "Matched and unmatched complaints are both retained.",
+    )
+    check(
+        checks,
+        "Complaint Silver Athena count",
+        match_report["final_rows"],
+        counts["silver_complaints"],
+        "Athena reads the complete geospatial match output.",
+    )
+    check(
+        checks,
+        "Complaint staging count",
+        counts["silver_complaints"],
+        counts["staging_complaints"],
+        "Staging is a thin view.",
+    )
+    check(
+        checks,
+        "Complaint fact count",
+        counts["staging_complaints"],
+        counts["fact_311_complaint"],
+        "The fact remains one row per complaint.",
+    )
+    check(
+        checks,
+        "Restaurant dimension grain",
+        counts["distinct_restaurant_camis"],
+        counts["dim_restaurant"],
+        "The dimension contains one row per CAMIS.",
+    )
+    check(
+        checks,
+        "Chain dimension grain",
+        counts["derived_chain_groups"],
+        counts["dim_chain"],
+        "The dimension contains one row per detected 3+ location chain family.",
+    )
+    check(
+        checks,
+        "Borough dimension grain",
+        5,
+        counts["dim_borough"],
+        "NYC has five borough members in scope.",
+    )
+    check(
+        checks,
+        "Violation dimension grain",
+        counts["distinct_violation_codes"],
+        counts["dim_violation"],
+        "The dimension contains one row per non-null violation code.",
+    )
+    check(
+        checks,
+        "Complaint-type dimension grain",
+        counts["distinct_complaint_types"],
+        counts["dim_complaint_type"],
+        "The dimension contains one row per relevant complaint type.",
+    )
+    check(
+        checks,
+        "Chain mart grain",
+        counts["dim_chain"],
+        counts["mart_chain_summary"],
+        "The chain mart contains one row per chain.",
+    )
 
     failed_checks = [item for item in checks if not item["passed"]]
     pending = {
@@ -378,20 +496,27 @@ def main() -> None:
         ContentType="application/json",
     )
 
-    print(json.dumps({
-        "status": report["status"],
-        "checks_passed": len(checks) - len(failed_checks),
-        "checks_failed": len(failed_checks),
-        "pending_bronze_rows": {
-            name: details["rows"] for name, details in pending.items()
-        },
-        "local_report": str(arguments.local_report),
-        "markdown_report": str(arguments.markdown_report),
-        "s3_report": f"s3://{bucket}/{arguments.s3_report_key}",
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "checks_passed": len(checks) - len(failed_checks),
+                "checks_failed": len(failed_checks),
+                "pending_bronze_rows": {
+                    name: details["rows"] for name, details in pending.items()
+                },
+                "local_report": str(arguments.local_report),
+                "markdown_report": str(arguments.markdown_report),
+                "s3_report": f"s3://{bucket}/{arguments.s3_report_key}",
+            },
+            indent=2,
+        )
+    )
 
     if failed_checks:
-        raise RuntimeError("Phase 4 reconciliation failed. Review the generated report.")
+        raise RuntimeError(
+            "Phase 4 reconciliation failed. Review the generated report."
+        )
 
 
 if __name__ == "__main__":

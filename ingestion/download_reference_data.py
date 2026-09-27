@@ -1,23 +1,8 @@
+"""Build geographic and brand reference files used by SafeEatsNYC.
+
+This manual job does not write to the Bronze or Silver layers.
 """
-This script prepares the geographic and brand reference files.
-It performs three jobs.
 
-4.1 Download borough and ZIP geography
-It downloads:
-- NYC Borough Boundaries
-- NYC ZCTA Boundaries
-
-4.2 Prepare ZIP to NTA mapping
-It creates a CSV file mapping each ZIP code (ZCTA) to its largest-overlapping Neighborhood Tabulation Area (NTA).
-
-4.3 Prepare fast food brand reference
-It creates a CSV file containing a list of fast food brands, which can be used for classification and analysis of restaurant data.
-
-This script is run manually. It is not part of the daily Airflow DAG and
-does not write to the Bronze or Silver layers.
-
-"""
-# Imports: Brings in tools for handling files (json, csv), temporary folders (tempfile), working with geospatial maps (geopandas), and sending web requests (requests).
 from __future__ import annotations
 
 import csv
@@ -28,7 +13,6 @@ from typing import Any
 
 import geopandas as gpd
 import requests
-
 from name_normalization import (
     apply_brand_classification_overrides,
     canonicalize_name,
@@ -36,7 +20,6 @@ from name_normalization import (
     load_brand_classification_overrides,
 )
 
-# Paths & URLs: Defines where the final reference files will be saved on your computer and the official web links used to download data from NYC Open Data (for borough and ZIP boundaries) and the OpenStreetMap Overpass API (for fast-food chains).
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_DIRECTORY = PROJECT_ROOT / "data" / "reference"
 
@@ -63,9 +46,7 @@ NTA_GEOJSON_URL = (
 
 OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
 
-# Settings: Sets up a bounding box around New York City so data searches stay focused only on the city, plus standard browser headers so the web requests don't get blocked.
-# Approximate NYC bounding box:
-# south, west, north, east
+# Approximate NYC bounds: south, west, north, east.
 NYC_BOUNDING_BOX = (
     40.4774,
     -74.2591,
@@ -78,7 +59,7 @@ HTTP_HEADERS = {
     "User-Agent": "SafeEatsNYC-portfolio-project",
 }
 
-# download_file(): Safely downloads files from the internet chunk-by-chunk and saves them directly to your local project folders.
+
 def download_file(url: str, output_path: Path) -> None:
     """Download a file without changing its contents."""
 
@@ -97,7 +78,7 @@ def download_file(url: str, output_path: Path) -> None:
                 if chunk:
                     output_file.write(chunk)
 
-# load_geojson(): Opens downloaded map files and makes sure they are valid geographic files (FeatureCollection) containing map shapes.
+
 def load_geojson(path: Path) -> dict[str, Any]:
     """Load and validate a GeoJSON FeatureCollection."""
 
@@ -114,12 +95,13 @@ def load_geojson(path: Path) -> dict[str, Any]:
 
     return document
 
-# normalize_column_names() & ensure_source_crs(): Small helpers that make sure map column names are lowercase and use the standard global map coordinate system (WGS 84 / EPSG:4326).
+
 def normalize_column_names(dataframe: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Make geographic source columns lowercase."""
 
     renamed_columns = {column: str(column).lower() for column in dataframe.columns}
     return dataframe.rename(columns=renamed_columns)
+
 
 def ensure_source_crs(dataframe: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Ensure GeoJSON data is treated as WGS 84."""
@@ -129,11 +111,6 @@ def ensure_source_crs(dataframe: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     return dataframe
 
-# build_zip_to_nta_lookup(): This function connects ZIP codes (ZCTAs) with Neighborhood Tabulation Areas (NTAs) in New York City:
-# Loads both map files and projects them into a New York measurement system (EPSG:2263) so area sizes can be calculated accurately.
-# Overlays the maps to see where ZIP codes and neighborhoods overlap
-# Figures out which neighborhood covers the largest area inside each ZIP code and matches them up
-# Saves this clean connection as a CSV file (zip_to_nta.csv)
 
 def build_zip_to_nta_lookup(zcta_path: Path, nta_path: Path) -> int:
     """Assign each ZCTA to its largest-overlapping NTA."""
@@ -158,7 +135,9 @@ def build_zip_to_nta_lookup(zcta_path: Path, nta_path: Path) -> int:
     # EPSG:2263 is New York State Plane, Long Island.
     # It lets us compare polygon areas using a projected CRS.
     zcta_projected = zcta[["zcta5", "geometry"]].to_crs(epsg=2263)
-    nta_projected = nta[["nta2020", "ntaname", "boroname", "geometry"]].to_crs(epsg=2263)
+    nta_projected = nta[["nta2020", "ntaname", "boroname", "geometry"]].to_crs(
+        epsg=2263
+    )
 
     intersections = gpd.overlay(
         zcta_projected,
@@ -170,8 +149,7 @@ def build_zip_to_nta_lookup(zcta_path: Path, nta_path: Path) -> int:
     intersections["overlap_area"] = intersections.geometry.area
 
     dominant_matches = (
-        intersections
-        .sort_values(by=["zcta5", "overlap_area"], ascending=[True, False])
+        intersections.sort_values(by=["zcta5", "overlap_area"], ascending=[True, False])
         .drop_duplicates(subset=["zcta5"], keep="first")
         .rename(
             columns={
@@ -197,6 +175,7 @@ def build_zip_to_nta_lookup(zcta_path: Path, nta_path: Path) -> int:
 
     return len(lookup)
 
+
 BRAND_ALIAS_PATH = REFERENCE_DIRECTORY / "brand_aliases.csv"
 BRAND_CLASSIFICATION_OVERRIDE_PATH = (
     REFERENCE_DIRECTORY / "brand_classification_overrides.csv"
@@ -206,11 +185,6 @@ BRAND_CLASSIFICATION_OVERRIDES = load_brand_classification_overrides(
     BRAND_CLASSIFICATION_OVERRIDE_PATH
 )
 
-# download_fast_food_brands():
-# - Queries the OpenStreetMap database for all locations tagged as fast-food restaurants within the New York City bounding box.
-# - Pulls out the brand names. If a place lists multiple brands separated by semicolons, it splits them up.
-# - Cleans and standardizes the brand names using your custom alias and override rules.
-# - Sorts them alphabetically and saves the unique list to fast_food_brands.csv.
 
 def download_fast_food_brands() -> int:
     """Download NYC fast-food brand tags from OpenStreetMap."""
@@ -277,12 +251,6 @@ def download_fast_food_brands() -> int:
 
     return len(normalized_brands)
 
-# The master function that runs everything in order when you execute the script manually:
-# Boroughs: Downloads NYC borough boundaries and checks that there are exactly 5 boroughs.
-# ZIP Codes: Downloads ZIP code boundary maps and ensures there are over 200 of them.
-# Neighborhoods (NTA): Temporarily downloads neighborhood boundary maps to build and validate the ZIP-to-NTA lookup file.
-# Fast Food: Pulls fast-food chain names from OpenStreetMap and saves the processed list.
-# Completion: Prints a success message showing the paths of all four saved reference files.
 
 def main() -> None:
     """Download and validate every static reference source."""
@@ -297,8 +265,7 @@ def main() -> None:
 
     if borough_count != 5:
         raise ValueError(
-            "Expected exactly five NYC borough features, "
-            f"but received {borough_count}."
+            f"Expected exactly five NYC borough features, but received {borough_count}."
         )
 
     print(f"Borough features: {borough_count}")
@@ -310,10 +277,7 @@ def main() -> None:
     zcta_count = len(zcta_document["features"])
 
     if zcta_count < 200:
-        raise ValueError(
-            "The ZCTA dataset contains fewer features "
-            "than expected."
-        )
+        raise ValueError("The ZCTA dataset contains fewer features than expected.")
 
     print(f"ZCTA features: {zcta_count}")
 

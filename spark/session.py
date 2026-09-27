@@ -8,7 +8,6 @@ from pathlib import Path
 import boto3
 from pyspark.sql import SparkSession
 
-
 # These versions match the dependencies used by PySpark 4.2.0.
 HADOOP_AWS_PACKAGE = "org.apache.hadoop:hadoop-aws:3.5.0"
 AWS_SDK_PACKAGE = "software.amazon.awssdk:bundle:2.35.4"
@@ -35,17 +34,19 @@ def configure_refreshable_spark_profile(profile: str, region: str) -> None:
     )
     os.environ["SAFEEATS_SOURCE_AWS_PROFILE"] = profile
     os.environ["SAFEEATS_SOURCE_AWS_CONFIG_FILE"] = source_config
-    os.environ[
-        "SAFEEATS_SOURCE_AWS_SHARED_CREDENTIALS_FILE"
-    ] = source_credentials
+    os.environ["SAFEEATS_SOURCE_AWS_SHARED_CREDENTIALS_FILE"] = source_credentials
 
     python_path = os.getenv("PYSPARK_PYTHON", "/usr/local/bin/python")
-    helper_path = Path(
-        os.getenv(
-            "SAFEEATS_PROJECT_ROOT",
-            Path(__file__).resolve().parents[1],
+    helper_path = (
+        Path(
+            os.getenv(
+                "SAFEEATS_PROJECT_ROOT",
+                Path(__file__).resolve().parents[1],
+            )
         )
-    ) / "spark" / "aws_credential_process.py"
+        / "spark"
+        / "aws_credential_process.py"
+    )
     SPARK_PROFILE_PATH.write_text(
         "\n".join(
             [

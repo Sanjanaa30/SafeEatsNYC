@@ -5,23 +5,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
+from pyspark import StorageLevel
+
 from spark.bronze_io import read_bronze_json
 from spark.bronze_runs import select_bronze_runs
 from spark.build_inspections_silver import (
-    ensure_prefix_is_new,
     grouped_counts,
     validated_run_id,
     write_report,
 )
 from spark.complaint_cleaning import prepare_complaints, split_complaints
 from spark.complaint_deduplication import deduplicate_complaints
+from spark.run_safety import prepare_run_output
 from spark.schemas import COMPLAINT_311_RAW_SCHEMA
 from spark.session import create_spark_session
-from spark.run_safety import prepare_run_output
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -39,9 +41,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=Path(
-            os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")
-        ),
+        default=Path(os.getenv("SAFEEATS_AUDIT_DB", "data/audit/ingestion_audit.db")),
     )
     return parser.parse_args()
 
@@ -102,7 +102,7 @@ def main() -> None:
             spark,
             [run.page_glob for run in runs],
             COMPLAINT_311_RAW_SCHEMA,
-        ).cache()
+        ).persist(StorageLevel.DISK_ONLY)
         raw_count = bronze.count()
         expected_raw_count = sum(run.rows_received for run in runs)
         if raw_count != expected_raw_count:
@@ -112,13 +112,13 @@ def main() -> None:
             )
 
         prepared = prepare_complaints(bronze)
-        deduplicated = deduplicate_complaints(prepared).cache()
+        deduplicated = deduplicate_complaints(prepared).persist(StorageLevel.DISK_ONLY)
         deduplicated_count = deduplicated.count()
         bronze.unpersist()
         ready, nonspatial, rejected = split_complaints(deduplicated)
-        ready.cache()
-        nonspatial.cache()
-        rejected.cache()
+        ready.persist(StorageLevel.DISK_ONLY)
+        nonspatial.persist(StorageLevel.DISK_ONLY)
+        rejected.persist(StorageLevel.DISK_ONLY)
         ready_count = ready.count()
         nonspatial_count = nonspatial.count()
         rejected_count = rejected.count()
@@ -134,9 +134,7 @@ def main() -> None:
                 "complaint_year", "complaint_month"
             ).parquet(locations["nonspatial_data"])
         if rejected_count:
-            rejected.write.mode("errorifexists").parquet(
-                locations["rejected_data"]
-            )
+            rejected.write.mode("errorifexists").parquet(locations["rejected_data"])
 
         ready_readback = spark.read.parquet(locations["ready_data"]).count()
         nonspatial_readback = (
@@ -198,10 +196,8 @@ def main() -> None:
         )
         print(json.dumps(report, indent=2, sort_keys=True))
     finally:
-        try:
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

@@ -25,7 +25,6 @@ from ingestion.storage import BronzeStorage, LocalBronzeStorage, S3BronzeStorage
 from orchestration.audit import PipelineAuditStore
 from orchestration.run_context import run_names
 
-
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(os.getenv("SAFEEATS_PROJECT_ROOT", "/opt/safeeats"))
 AUDIT_DATABASE = Path(
@@ -165,9 +164,10 @@ def run_retry_probe(pipeline_run_id: str) -> None:
 def dbt_runtime_paths(names: dict[str, str]) -> tuple[str, str]:
     """Keep dbt's temporary files outside the read-only project mount."""
 
-    runtime_root = Path(
-        os.getenv("SAFEEATS_DBT_RUNTIME_ROOT", "/tmp/safeeats-dbt")
-    ) / names["run_token"]
+    runtime_root = (
+        Path(os.getenv("SAFEEATS_DBT_RUNTIME_ROOT", "/tmp/safeeats-dbt"))
+        / names["run_token"]
+    )
     return str(runtime_root / "logs"), str(runtime_root / "target")
 
 
@@ -223,14 +223,16 @@ def safeeats_daily_pipeline():
         run_stage(
             "build_inspections_silver",
             names["pipeline_run_id"],
-            [[
-                "python",
-                "-m",
-                "spark.build_inspections_silver",
-                "--run-id",
-                names["inspections_silver_run_id"],
-                "--retry-incomplete",
-            ]],
+            [
+                [
+                    "python",
+                    "-m",
+                    "spark.build_inspections_silver",
+                    "--run-id",
+                    names["inspections_silver_run_id"],
+                    "--retry-incomplete",
+                ]
+            ],
         )
 
     @task(task_id="build_complaints_silver")
@@ -238,14 +240,16 @@ def safeeats_daily_pipeline():
         run_stage(
             "build_complaints_silver",
             names["pipeline_run_id"],
-            [[
-                "python",
-                "-m",
-                "spark.build_complaints_silver",
-                "--run-id",
-                names["complaints_silver_run_id"],
-                "--retry-incomplete",
-            ]],
+            [
+                [
+                    "python",
+                    "-m",
+                    "spark.build_complaints_silver",
+                    "--run-id",
+                    names["complaints_silver_run_id"],
+                    "--retry-incomplete",
+                ]
+            ],
         )
 
     @task(task_id="build_geospatial_matches")
@@ -253,18 +257,20 @@ def safeeats_daily_pipeline():
         run_stage(
             "build_geospatial_matches",
             names["pipeline_run_id"],
-            [[
-                "python",
-                "-m",
-                "spark.build_geospatial_matches",
-                "--run-id",
-                names["matches_run_id"],
-                "--inspections-run-id",
-                names["inspections_silver_run_id"],
-                "--complaints-run-id",
-                names["complaints_silver_run_id"],
-                "--retry-incomplete",
-            ]],
+            [
+                [
+                    "python",
+                    "-m",
+                    "spark.build_geospatial_matches",
+                    "--run-id",
+                    names["matches_run_id"],
+                    "--inspections-run-id",
+                    names["inspections_silver_run_id"],
+                    "--complaints-run-id",
+                    names["complaints_silver_run_id"],
+                    "--retry-incomplete",
+                ]
+            ],
         )
 
     @task(task_id="register_silver_in_athena")
@@ -272,14 +278,16 @@ def safeeats_daily_pipeline():
         run_stage(
             "register_silver_in_athena",
             names["pipeline_run_id"],
-            [[
-                "python",
-                str(PROJECT_ROOT / "warehouse" / "setup_athena.py"),
-                "--inspections-run-id",
-                names["inspections_silver_run_id"],
-                "--matches-run-id",
-                names["matches_run_id"],
-            ]],
+            [
+                [
+                    "python",
+                    str(PROJECT_ROOT / "warehouse" / "setup_athena.py"),
+                    "--inspections-run-id",
+                    names["inspections_silver_run_id"],
+                    "--matches-run-id",
+                    names["matches_run_id"],
+                ]
+            ],
         )
 
     @task(task_id="build_gold")
@@ -324,20 +332,22 @@ def safeeats_daily_pipeline():
         run_stage(
             "test_gold",
             names["pipeline_run_id"],
-            [[
-                "dbt",
-                "--log-path",
-                log_path,
-                "test",
-                "--target-path",
-                target_path,
-                "--project-dir",
-                str(PROJECT_ROOT / "dbt"),
-                "--profiles-dir",
-                str(PROJECT_ROOT / "dbt"),
-                "--vars",
-                json.dumps({"ml_scoring_date": names["scoring_date"]}),
-            ]],
+            [
+                [
+                    "dbt",
+                    "--log-path",
+                    log_path,
+                    "test",
+                    "--target-path",
+                    target_path,
+                    "--project-dir",
+                    str(PROJECT_ROOT / "dbt"),
+                    "--profiles-dir",
+                    str(PROJECT_ROOT / "dbt"),
+                    "--vars",
+                    json.dumps({"ml_scoring_date": names["scoring_date"]}),
+                ]
+            ],
         )
 
     @task(task_id="reconciliation")
@@ -346,24 +356,26 @@ def safeeats_daily_pipeline():
         run_stage(
             "reconciliation",
             names["pipeline_run_id"],
-            [[
-                "python",
-                str(PROJECT_ROOT / "warehouse" / "reconcile_phase4.py"),
-                "--inspections-run-id",
-                names["inspections_silver_run_id"],
-                "--complaints-run-id",
-                names["complaints_silver_run_id"],
-                "--matches-run-id",
-                names["matches_run_id"],
-                "--audit-db",
-                str(AUDIT_DATABASE),
-                "--local-report",
-                str(report_root / "reconciliation.json"),
-                "--markdown-report",
-                str(report_root / "reconciliation.md"),
-                "--s3-report-key",
-                f"gold/_audit/pipeline_run_id={names['run_token']}/reconciliation.json",
-            ]],
+            [
+                [
+                    "python",
+                    str(PROJECT_ROOT / "warehouse" / "reconcile_phase4.py"),
+                    "--inspections-run-id",
+                    names["inspections_silver_run_id"],
+                    "--complaints-run-id",
+                    names["complaints_silver_run_id"],
+                    "--matches-run-id",
+                    names["matches_run_id"],
+                    "--audit-db",
+                    str(AUDIT_DATABASE),
+                    "--local-report",
+                    str(report_root / "reconciliation.json"),
+                    "--markdown-report",
+                    str(report_root / "reconciliation.md"),
+                    "--s3-report-key",
+                    f"gold/_audit/pipeline_run_id={names['run_token']}/reconciliation.json",
+                ]
+            ],
         )
 
     @task(task_id="pipeline_complete")

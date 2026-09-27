@@ -1,104 +1,152 @@
 # Static reference data
 
-This document describes the files stored under `data/reference/`. Those files
-support maps, neighborhood labels, and fast-food brand confirmation. They are
-downloaded manually and do not pass through the Bronze, Silver, or daily
-Airflow pipeline.
+The files in `data/reference/` add geographic labels and reviewed restaurant
+brand information to SafeEats NYC.
 
-## Files
+They are different from the daily inspection and 311 data:
 
-### `nyc_borough_boundaries.geojson` - Borough API output file
+- Daily source data moves through the Bronze, Silver, and Gold layers.
+- Reference files are downloaded or reviewed separately and change less often.
+- A reference refresh should be reviewed before its results are used by the
+  pipeline or website.
 
-- Source: NYC Open Data
-- Dataset: Borough Boundaries
-- Dataset ID: `gthc-hcne`
-- Use: Borough map shading on dashboard Pages 1 and 2
+## File summary
 
-### `nyc_zcta_boundaries.geojson` - NYC ZipCode API File
+| File | Purpose | Source |
+|---|---|---|
+| `nyc_borough_boundaries.geojson` | Draws the five boroughs on the correlation map. | NYC Open Data `gthc-hcne` |
+| `nyc_zcta_boundaries.geojson` | Provides NYC ZIP Code Tabulation Area boundaries. | NYC Open Data `35j5-n34v` |
+| `zip_to_nta.csv` | Gives each ZIP a practical neighborhood and borough label. | NYC ZCTA and 2020 NTA boundaries |
+| `fast_food_brands.csv` | Lists normalized fast-food and reviewed quick-service brands. | OpenStreetMap plus reviewed overrides |
+| `brand_aliases.csv` | Maps an older or alternate brand name to one standard name. | Manual review |
+| `brand_classification_overrides.csv` | Explicitly includes or excludes unusual brand classifications. | Manual review |
+| `co_brand_associations.csv` | Records locations that contain more than one reviewed brand. | Manual review |
 
-- Source: NYC Open Data
-- Dataset: ZIP Code Tabulation Areas
-- Dataset ID: `35j5-n34v`
-- Use: ZIP-level geography and map/navigation support
+## Geographic files
 
-### `zip_to_nta.csv` - ZIP-to-NTA Lookup Table
+### Borough boundaries
 
-- Source inputs:
-  - NYC ZCTA boundaries: `35j5-n34v`
-  - NYC 2020 NTA boundaries: `9nt8-h7nd`
-- Method: Each ZCTA is assigned to the NTA with the largest geographic
-  polygon overlap.
-- Columns:
-  - `zip`
-  - `nta_code`
-  - `nta_name`
-  - `borough`
-- Limitation: ZIP/ZCTA and NTA boundaries are not naturally one-to-one.
-  The assigned NTA is therefore a dominant-area approximation.
+`nyc_borough_boundaries.geojson` contains one shape for each NYC borough. The
+website uses a copy at `frontend/public/maps/nyc_borough_boundaries.geojson` so
+the browser can draw the correlation map without AWS access.
 
-### `fast_food_brands.csv` - Fast-Food Output file
+When the source boundary file is refreshed, review it and update the frontend
+copy before publishing the website.
 
-## Brand normalization and harmonization
+### ZIP boundaries
 
-Brand values are standardized to uppercase, punctuation is removed,
-whitespace is collapsed, hash-prefixed store identifiers are removed, and
-common legal suffixes are removed only when they occur at the end. Descriptive
-words and location qualifiers are preserved unless a reviewed whole-name alias
-maps them to a canonical brand.
+`nyc_zcta_boundaries.geojson` contains ZIP Code Tabulation Area shapes. A ZCTA
+is the Census Bureau's geographic approximation of a postal ZIP code.
 
-Evidence-backed historical aliases are then mapped to one canonical
-brand name. For example:
+### ZIP-to-neighborhood lookup
 
-- `DUNKIN DONUTS` → `DUNKIN`
+`zip_to_nta.csv` contains:
 
-The same normalization and alias rules must later be applied to DOHMH
-restaurant names before joining them to this reference list.
+- `zip`: five-digit ZIP code
+- `nta_code`: NYC Neighborhood Tabulation Area code
+- `nta_name`: neighborhood name
+- `borough`: borough name
 
-- Source: OpenStreetMap contributors through the Overpass API
-- Selection: NYC features tagged with both `amenity=fast_food` and `brand`
-- Column: `brand_name_normalized`
-- Use: Confirms fast-food brands independently of the three-location
-  chain-detection rule
-- License/attribution: © OpenStreetMap contributors, Open Database License
+A ZIP and a neighborhood do not always have the same boundary. The preparation
+script assigns each ZIP to the neighborhood with the largest overlapping area.
+This makes the lookup useful for labels, but it is still an approximation.
 
-### `brand_aliases.csv` - Hand-curated file
+dbt loads this CSV as a seed and uses it when building restaurant dimensions.
 
-- Columns: `alias_name_normalized`, `brand_name_normalized`
-- Use: reviewed historical or alternate whole-name aliases
-- Rule: both columns use the shared syntax normalization before lookup
+## Brand files
 
-### `brand_classification_overrides.csv` - Hand-curated file
+### Fast-food brand list
 
-- Columns: `brand_name_normalized`, `action`, `reason`
-- Use: explicit QSR-scope decisions applied after the OpenStreetMap download
-- `INCLUDE`: reviewed counter-service food, beverage, or dessert chains that
-  OSM may classify as `cafe` or `ice_cream` instead of `fast_food`
-- `EXCLUDE`: non-restaurant brands incorrectly returned by source tagging
-- Current policy: the dashboard's confirmed-fast-food flag uses this broader
-  quick-service scope; the reason column documents every manual exception
+`fast_food_brands.csv` contains one normalized brand per row. The base list
+comes from OpenStreetMap features in NYC tagged with both `amenity=fast_food`
+and `brand`.
 
-### `co_brand_associations.csv` - Hand-curated file
+The list is used to confirm quick-service brands independently of the rule that
+identifies restaurant groups from repeated names and locations.
 
-- Columns: `location_name_normalized`, `brand_name_normalized`
-- Grain: one row per composite location name and constituent brand
-- Use: preserves multiple brands at one location while producing exact-join
-  brand candidates
-- Rule: separators such as `/`, `&`, commas, and `AND` never create an
-  association automatically; each composite name must be reviewed
+OpenStreetMap data is provided by OpenStreetMap contributors under the Open
+Database License.
 
-DOHMH `dba` remains unchanged. Its normalized composite name remains one
-restaurant-level value for the three-location chain heuristic. A separate
-one-to-many association is used for brand confirmation, and
-`is_confirmed_fast_food` is true when any associated canonical brand exactly
-matches `fast_food_brands.brand_name_normalized`.
+### Brand aliases
 
-## Refresh policy
+`brand_aliases.csv` maps reviewed alternate names to one standard brand name.
+For example:
 
-These files are downloaded once for the MVP and refreshed only when their
-reference sources materially change.
+```text
+DUNKIN DONUTS -> DUNKIN
+```
 
-## Pipeline treatment
+Both sides of the mapping use the same name-cleaning rules.
 
-These files are not Bronze or Silver data. The Streamlit application reads
-the geographic files directly, while dbt uses the ZIP/NTA and brand lookup
-files when building the Gold layer.
+### Classification overrides
+
+`brand_classification_overrides.csv` contains:
+
+- `brand_name_normalized`
+- `action`
+- `reason`
+
+`INCLUDE` adds a reviewed food, drink, or dessert brand that OpenStreetMap may
+classify as a cafe or ice-cream shop instead of fast food. `EXCLUDE` removes a
+non-restaurant or incorrectly tagged brand. The reason records why the manual
+decision was made.
+
+### Co-brand associations
+
+`co_brand_associations.csv` contains:
+
+- `location_name_normalized`
+- `brand_name_normalized`
+
+It allows one restaurant location name to point to several brands. Separators
+such as `/`, `&`, commas, or `AND` do not create associations automatically.
+Each co-brand name must be reviewed first.
+
+The original DOHMH restaurant name is preserved. Name normalization creates a
+separate matching value and does not rewrite the official name shown to users.
+
+## Name normalization
+
+For matching only, names are converted to uppercase, punctuation and repeated
+spaces are removed, store numbers beginning with `#` are removed, and common
+legal suffixes are removed when they appear at the end. Reviewed aliases are
+then applied.
+
+This improves matching, but similar names are not always the same business.
+Uncertain group or brand matches should remain in a review queue instead of
+being joined automatically.
+
+## Refresh the generated files
+
+From the repository root, activate the Python environment and run:
+
+```powershell
+python ingestion/download_reference_data.py
+```
+
+The script:
+
+1. Downloads borough boundaries.
+2. Downloads ZCTA boundaries.
+3. Temporarily downloads NTA boundaries.
+4. Builds the ZIP-to-NTA lookup using the largest polygon overlap.
+5. Downloads OpenStreetMap fast-food brands.
+6. Applies the reviewed aliases and classification overrides.
+7. Validates the outputs before finishing.
+
+The command writes the four generated files. It does not overwrite the three
+manual review files unless they are edited separately.
+
+## Review checklist
+
+After a refresh:
+
+1. Confirm that the borough file still contains exactly five boroughs.
+2. Confirm that the ZCTA and ZIP lookup contain the expected NYC coverage.
+3. Review brand additions, removals, aliases, and overrides.
+4. Confirm that co-brand mappings still represent real shared locations.
+5. Copy the approved borough GeoJSON to `frontend/public/maps/`.
+6. Rebuild the affected Silver and Gold outputs before relying on the changes.
+
+Reference data is refreshed only when a source or a reviewed mapping changes
+materially; it is not part of the normal daily Airflow run.

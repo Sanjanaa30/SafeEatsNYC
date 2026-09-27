@@ -7,6 +7,25 @@ with history_windows as (
         lag(score) over (
             partition by restaurant_key order by inspection_date
         ) as earlier_score,
+        date_diff(
+            'day',
+            lag(inspection_date) over (
+                partition by restaurant_key order by inspection_date
+            ),
+            inspection_date
+        ) as days_between_last_two_graded_inspections,
+        avg(score) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_inspection_avg_score,
+        sum(critical_violation_count) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_critical_violation_count,
+        sum(case when has_critical_violation then 1 else 0 end) over (
+            partition by restaurant_key order by inspection_date
+            rows between 2 preceding and current row
+        ) as recent_3_inspections_with_critical,
         row_number() over (
             partition by restaurant_key order by inspection_date
         ) as known_graded_inspection_count,
@@ -56,6 +75,11 @@ labeled_history as (
         history.earlier_grade,
         history.earlier_score,
         history.score - history.earlier_score as recent_score_change,
+        history.score > history.earlier_score as latest_score_worsened,
+        history.days_between_last_two_graded_inspections,
+        history.recent_3_inspection_avg_score,
+        history.recent_3_critical_violation_count,
+        history.recent_3_inspections_with_critical,
         date_diff(
             'day',
             targets.prediction_anchor_date,
@@ -121,6 +145,11 @@ select
     history.earlier_grade,
     history.earlier_score,
     history.recent_score_change,
+    history.latest_score_worsened,
+    history.days_between_last_two_graded_inspections,
+    history.recent_3_inspection_avg_score,
+    history.recent_3_critical_violation_count,
+    history.recent_3_inspections_with_critical,
     history.days_since_last_graded_inspection,
     history.previous_inspection_violation_count,
     history.previous_inspection_critical_violation_count,

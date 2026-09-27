@@ -40,6 +40,15 @@ dbt/target/
 dbt/logs/
 dbt/dbt_packages/
 
+# Next.js-generated files
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+*.tsbuildinfo
+
 # Streamlit secrets
 .streamlit/secrets.toml
 
@@ -49,3 +58,11 @@ dbt/dbt_packages/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+*.joblib
+*.pkl

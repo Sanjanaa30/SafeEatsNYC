@@ -33,9 +33,7 @@ def main() -> None:
     base_key = f"{arguments.output_prefix.strip('/')}/run_id={arguments.run_id}"
     s3 = boto3.Session(profile_name=profile, region_name=region).client("s3")
 
-    report = json.loads(
-        read_object(s3, bucket, f"{base_key}/preparation_report.json")
-    )
+    report = json.loads(read_object(s3, bucket, f"{base_key}/preparation_report.json"))
     feature_names = json.loads(
         read_object(s3, bucket, f"{base_key}/feature_names.json")
     )

@@ -35,11 +35,15 @@ def main() -> None:
 
     report = json.loads(read("evaluation_report.json"))
     bundle = joblib.load(io.BytesIO(read("model_bundle.joblib")))
-    predictions = pd.read_csv(io.BytesIO(gzip.decompress(read("test_predictions.csv.gz"))))
+    predictions = pd.read_csv(
+        io.BytesIO(gzip.decompress(read("test_predictions.csv.gz")))
+    )
 
     expected_rows = report["test"]["rows"]
     if "label_maturation" in report:
-        expected_rows += report["label_maturation"]["immature_rows_excluded_from_metrics"]
+        expected_rows += report["label_maturation"][
+            "immature_rows_excluded_from_metrics"
+        ]
     if len(predictions) != expected_rows:
         raise ValueError("Saved prediction count does not match the evaluation report.")
     if set(predictions["risk_category"]) - {"LOW", "MODERATE", "HIGH"}:

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pyspark.sql import DataFrame, Window, functions as F
+from pyspark.sql import DataFrame, Window
+from pyspark.sql import functions as F
 
 from spark.schemas import COMPLAINT_311_RAW_SCHEMA
-
 
 COMPLAINT_SOURCE_COLUMNS = tuple(COMPLAINT_311_RAW_SCHEMA.fieldNames())
 
@@ -23,9 +23,9 @@ def deduplicate_complaints(frame: DataFrame) -> DataFrame:
 
     identified = add_complaint_record_id(frame).withColumn(
         "_deduplication_key",
-        F.when(
-            F.col("unique_key").isNotNull(), F.col("unique_key")
-        ).otherwise(F.concat(F.lit("MISSING:"), F.col("complaint_record_id"))),
+        F.when(F.col("unique_key").isNotNull(), F.col("unique_key")).otherwise(
+            F.concat(F.lit("MISSING:"), F.col("complaint_record_id"))
+        ),
     )
     ordering = Window.partitionBy("_deduplication_key").orderBy(
         F.col("resolution_action_updated_date").desc_nulls_last(),
@@ -39,4 +39,3 @@ def deduplicate_complaints(frame: DataFrame) -> DataFrame:
         .filter(F.col("_duplicate_rank") == 1)
         .drop("_duplicate_rank", "_deduplication_key")
     )
-

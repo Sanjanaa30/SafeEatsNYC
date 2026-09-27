@@ -9,7 +9,6 @@ import time
 import boto3
 from dotenv import load_dotenv
 
-
 INSPECTIONS_COLUMNS = """
     inspection_violation_id string,
     camis string,
@@ -29,6 +28,8 @@ INSPECTIONS_COLUMNS = """
     score integer,
     grade string,
     inspection_type string,
+    action string,
+    record_date timestamp,
     latitude double,
     longitude double,
     coordinate_status string
@@ -133,12 +134,9 @@ def main() -> None:
     if not output_location:
         output_location = f"s3://{bucket}/athena/query-results/"
 
-    client = boto3.Session(profile_name=profile, region_name=region).client(
-        "athena"
-    )
+    client = boto3.Session(profile_name=profile, region_name=region).client("athena")
     inspection_location = (
-        f"s3://{bucket}/silver/inspections/"
-        f"run_id={selected.inspections_run_id}/data/"
+        f"s3://{bucket}/silver/inspections/run_id={selected.inspections_run_id}/data/"
     )
     match_location = (
         f"s3://{bucket}/silver/complaint_restaurant_matches/"

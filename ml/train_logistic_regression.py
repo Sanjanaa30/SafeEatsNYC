@@ -68,12 +68,16 @@ def load_metadata(s3, bucket: str, key: str) -> pd.DataFrame:
     return frame
 
 
-def classification_metrics(labels: np.ndarray, probabilities: np.ndarray, threshold: float) -> dict:
+def classification_metrics(
+    labels: np.ndarray, probabilities: np.ndarray, threshold: float
+) -> dict:
     predictions = (probabilities >= threshold).astype(np.int8)
     tn, fp, fn, tp = confusion_matrix(labels, predictions, labels=[0, 1]).ravel()
     return {
         "threshold": round(float(threshold), 6),
-        "precision": round(float(precision_score(labels, predictions, zero_division=0)), 6),
+        "precision": round(
+            float(precision_score(labels, predictions, zero_division=0)), 6
+        ),
         "recall": round(float(recall_score(labels, predictions, zero_division=0)), 6),
         "f1": round(float(f1_score(labels, predictions, zero_division=0)), 6),
         "confusion_matrix": {
@@ -85,7 +89,12 @@ def classification_metrics(labels: np.ndarray, probabilities: np.ndarray, thresh
     }
 
 
-def select_risk_thresholds(labels: np.ndarray, probabilities: np.ndarray) -> tuple[float, float]:
+MINIMUM_HIGH_RISK_PRECISION = 0.35
+
+
+def select_risk_thresholds(
+    labels: np.ndarray, probabilities: np.ndarray
+) -> tuple[float, float]:
     precision, recall, thresholds = precision_recall_curve(labels, probabilities)
     if len(thresholds) == 0:
         raise ValueError("Threshold validation produced no candidate thresholds.")
@@ -98,7 +107,18 @@ def select_risk_thresholds(labels: np.ndarray, probabilities: np.ndarray) -> tup
         out=np.zeros_like(candidate_precision),
         where=(candidate_precision + candidate_recall) > 0,
     )
-    high = float(thresholds[int(np.argmax(f1))])
+    f1_high_index = int(np.argmax(f1))
+    high_index = f1_high_index
+    precision_candidates = np.where(
+        (candidate_precision >= MINIMUM_HIGH_RISK_PRECISION)
+        & (thresholds >= thresholds[f1_high_index])
+        & (candidate_recall > 0)
+    )[0]
+    if len(precision_candidates):
+        # The first eligible threshold is the least restrictive one that meets
+        # the precision floor, preserving as much recall as possible.
+        high_index = int(precision_candidates[0])
+    high = float(thresholds[high_index])
 
     moderate_candidates = np.where((candidate_recall >= 0.80) & (thresholds < high))[0]
     if len(moderate_candidates):
@@ -115,7 +135,9 @@ def select_risk_thresholds(labels: np.ndarray, probabilities: np.ndarray) -> tup
     return moderate, high
 
 
-def risk_categories(probabilities: np.ndarray, moderate: float, high: float) -> np.ndarray:
+def risk_categories(
+    probabilities: np.ndarray, moderate: float, high: float
+) -> np.ndarray:
     return np.select(
         [probabilities >= high, probabilities >= moderate],
         ["HIGH", "MODERATE"],
@@ -130,12 +152,16 @@ def risk_tier_summary(labels: np.ndarray, categories: np.ndarray) -> dict:
         result[category] = {
             "rows": int(len(selected)),
             "actual_grade_bc_rows": int(selected.sum()),
-            "actual_grade_bc_rate": round(float(selected.mean()), 6) if len(selected) else None,
+            "actual_grade_bc_rate": round(float(selected.mean()), 6)
+            if len(selected)
+            else None,
         }
     return result
 
 
-def calibration_summary(labels: np.ndarray, probabilities: np.ndarray) -> tuple[dict, pd.DataFrame]:
+def calibration_summary(
+    labels: np.ndarray, probabilities: np.ndarray
+) -> tuple[dict, pd.DataFrame]:
     observed, predicted = calibration_curve(
         labels, probabilities, n_bins=10, strategy="quantile"
     )
@@ -169,7 +195,9 @@ def main() -> None:
     bucket = os.environ["SAFEEATS_S3_BUCKET"]
     profile = os.getenv("AWS_PROFILE", "safeeats-dev")
     region = os.getenv("AWS_REGION", "us-east-1")
-    prepared_key = f"{arguments.prepared_prefix.strip('/')}/run_id={arguments.preparation_run_id}"
+    prepared_key = (
+        f"{arguments.prepared_prefix.strip('/')}/run_id={arguments.preparation_run_id}"
+    )
     model_key = f"{arguments.model_prefix.strip('/')}/run_id={arguments.model_run_id}"
     s3 = boto3.Session(profile_name=profile, region_name=region).client("s3")
 
@@ -187,18 +215,28 @@ def main() -> None:
     y_test = load_numpy(s3, bucket, f"{prepared_key}/y_test.npy")
     train_rows = load_metadata(s3, bucket, f"{prepared_key}/train_rows.csv.gz")
     test_rows = load_metadata(s3, bucket, f"{prepared_key}/test_rows.csv.gz")
-    feature_names = json.loads(read_object(s3, bucket, f"{prepared_key}/feature_names.json"))
-    preprocessor = joblib.load(io.BytesIO(read_object(s3, bucket, f"{prepared_key}/preprocessor.joblib")))
+    feature_names = json.loads(
+        read_object(s3, bucket, f"{prepared_key}/feature_names.json")
+    )
+    preprocessor = joblib.load(
+        io.BytesIO(read_object(s3, bucket, f"{prepared_key}/preprocessor.joblib"))
+    )
 
     validation_start = pd.Timestamp(arguments.threshold_validation_start_date)
-    development_mask = (train_rows["target_inspection_date"] < validation_start).to_numpy()
+    development_mask = (
+        train_rows["target_inspection_date"] < validation_start
+    ).to_numpy()
     validation_mask = ~development_mask
     if not development_mask.any() or not validation_mask.any():
-        raise ValueError("Threshold-validation date produced an empty development or validation set.")
+        raise ValueError(
+            "Threshold-validation date produced an empty development or validation set."
+        )
 
     threshold_model = LogisticRegression(max_iter=2000, solver="lbfgs")
     threshold_model.fit(x_train[development_mask], y_train[development_mask])
-    validation_probabilities = threshold_model.predict_proba(x_train[validation_mask])[:, 1]
+    validation_probabilities = threshold_model.predict_proba(x_train[validation_mask])[
+        :, 1
+    ]
     moderate_threshold, high_threshold = select_risk_thresholds(
         y_train[validation_mask], validation_probabilities
     )
@@ -212,7 +250,9 @@ def main() -> None:
 
     calibration, calibration_bins = calibration_summary(y_test, test_probabilities)
     default_metrics = classification_metrics(y_test, test_probabilities, 0.5)
-    high_risk_metrics = classification_metrics(y_test, test_probabilities, high_threshold)
+    high_risk_metrics = classification_metrics(
+        y_test, test_probabilities, high_threshold
+    )
 
     coefficients = pd.DataFrame(
         {"feature": feature_names, "coefficient": model.coef_[0]}
@@ -261,7 +301,9 @@ def main() -> None:
             "grade_bc_rows": int(y_test.sum()),
             "grade_bc_rate": round(float(y_test.mean()), 6),
             "roc_auc": round(float(roc_auc_score(y_test, test_probabilities)), 6),
-            "average_precision": round(float(average_precision_score(y_test, test_probabilities)), 6),
+            "average_precision": round(
+                float(average_precision_score(y_test, test_probabilities)), 6
+            ),
             "default_0_5_metrics": default_metrics,
             "high_risk_metrics": high_risk_metrics,
             "calibration": calibration,

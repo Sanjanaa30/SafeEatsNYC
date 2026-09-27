@@ -1,6 +1,5 @@
 """Reliable paginated NYC Open Data ingestion into Bronze object storage."""
-# This module contains the core logic for paginated ingestion of NYC Open Data into the Bronze storage layer.
-# It handles timestamp parsing, window building, retrying HTTP sessions, and record validation.
+
 from __future__ import annotations
 
 import json
@@ -18,7 +17,6 @@ from urllib3.util.retry import Retry
 from ingestion.audit import AuditRecord, AuditStore
 from ingestion.sources import SourceConfig
 from ingestion.storage import BronzeStorage, LocalBronzeStorage
-
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PAGE_SIZE = 10_000
@@ -41,7 +39,7 @@ def utc_now() -> datetime:
 
     return datetime.now(timezone.utc)
 
-# Clean up and format dates so they match exactly what the Socrata API expects.
+
 def parse_timestamp(value: str) -> datetime:
     """Parse Socrata or ISO timestamps and normalize them to UTC."""
 
@@ -50,13 +48,13 @@ def parse_timestamp(value: str) -> datetime:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
 
-# Format timestamps for use in Socrata SoQL predicates.
+
 def format_socrata_timestamp(value: datetime) -> str:
     """Format an aware timestamp for a Socrata SoQL predicate."""
 
     return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000")
 
-# Clean up orchestrator run IDs to make them safe for use in file paths.
+
 def safe_run_id(run_id: str) -> str:
     """Convert an orchestrator run ID into one safe path component."""
 
@@ -86,8 +84,8 @@ def build_run_prefix(source: SourceConfig, ingest_date: str, run_id: str) -> str
         )
     )
 
+
 # Create a retrying HTTP session for making requests to the NYC Open Data API.
-# build_retrying_session(): Sets up an intelligent network session that automatically retries if the API fails due to temporary connection drops or server errors (status codes like 429, 500, etc.).
 def build_retrying_session(app_token: str | None = None) -> requests.Session:
     """Create a session that retries transient NYC API failures."""
 
@@ -116,7 +114,7 @@ def build_retrying_session(app_token: str | None = None) -> requests.Session:
         session.headers["X-App-Token"] = app_token
     return session
 
-# build_window(): Defines the time range and SQL-like filter for the data extraction, ensuring that only the relevant records are fetched based on the last successful ingestion and any explicit start times provided.
+
 def build_window(
     *,
     source: SourceConfig,
@@ -155,7 +153,7 @@ def build_window(
     )
     return IngestionWindow(start=start, end=run_end, where_clause=where_clause)
 
-# validate_records(): Checks each record in the API response to ensure it conforms to the expected format and required fields for the source.
+
 def validate_records(
     records: Any,
     source: SourceConfig,
@@ -186,7 +184,7 @@ def validate_records(
             )
     return records
 
-# decode_and_validate_page(): Decodes the raw bytes of an API response into JSON and then validates the records against the source contract.
+
 def decode_and_validate_page(
     content: bytes,
     source: SourceConfig,
@@ -199,6 +197,7 @@ def decode_and_validate_page(
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("API response is not valid UTF-8 JSON.") from error
     return validate_records(decoded, source, page_size)
+
 
 # write_manifest(): Writes immutable request metadata through the selected storage backend.
 # Setup & Storage Selection
@@ -221,7 +220,7 @@ def write_manifest(
         return
     storage.write_bytes(relative_key, serialized)
 
-# max_source_timestamp(): Determines the maximum timestamp from a page of validated records, comparing it with an existing watermark to advance the ingestion progress.
+
 def max_source_timestamp(
     records: list[dict[str, Any]],
     source: SourceConfig,
@@ -237,8 +236,8 @@ def max_source_timestamp(
         return current
     return max(current, page_max)
 
-# run_ingestion(): The main entry point for ingesting data from a source. 
-# It orchestrates the entire ingestion process, including building the window, fetching pages, validating records, writing files, and updating the audit state.
+
+# run_ingestion(): The main entry point for ingesting data from a source.
 def run_ingestion(
     *,
     source: SourceConfig,
@@ -283,9 +282,7 @@ def run_ingestion(
         overlap_days=overlap_days,
         initial_lookback_days=initial_lookback_days,
     )
-    request_order = ", ".join(
-        f"{field} ASC" for field in source.order_fields
-    )
+    request_order = ", ".join(f"{field} ASC" for field in source.order_fields)
     manifest = {
         "api_url": source.api_url,
         "order": request_order,

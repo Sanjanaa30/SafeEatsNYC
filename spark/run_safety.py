@@ -33,7 +33,9 @@ def delete_exact_prefix(client, bucket: str, prefix: str) -> int:
         response = client.list_objects_v2(**request)
         objects = [{"Key": item["Key"]} for item in response.get("Contents", [])]
         if objects:
-            client.delete_objects(Bucket=bucket, Delete={"Objects": objects, "Quiet": True})
+            client.delete_objects(
+                Bucket=bucket, Delete={"Objects": objects, "Quiet": True}
+            )
             deleted += len(objects)
         if not response.get("IsTruncated"):
             return deleted

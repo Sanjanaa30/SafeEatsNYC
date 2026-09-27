@@ -14,7 +14,6 @@ from typing import Any
 
 import pandas as pd
 import requests
-
 from name_normalization import (
     brand_candidates,
     canonicalize_name,
@@ -22,19 +21,15 @@ from name_normalization import (
     normalize_name,
 )
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_DIRECTORY = PROJECT_ROOT / "data" / "reference"
-REPORT_PATH = (
-    PROJECT_ROOT / "docs" / "project_documents" / "restaurant_name_profile.md"
-)
+REPORT_PATH = PROJECT_ROOT / "docs" / "project_documents" / "restaurant_name_profile.md"
 REVIEW_PATH = PROJECT_ROOT / "docs" / "co_brand_review_queue.csv"
 ALIAS_REVIEW_PATH = PROJECT_ROOT / "docs" / "brand_alias_review_queue.csv"
 DOHMH_API_URL = "https://data.cityofnewyork.us/resource/43nn-pn8j.json"
 PAGE_SIZE = 50_000
 
-# fetch_restaurant_names(): Connects to the live NYC Open Data API (DOHMH_API_URL) and pulls every single unique restaurant ID (camis) and business name (dba) combination.
-# Pagination (PAGE_SIZE = 50_000): Because there are tens of thousands of restaurants in New York City, the script downloads them in batches of 50,000 rows at a time in a loop until it has grabbed everything safely.
+
 def fetch_restaurant_names() -> list[dict[str, Any]]:
     """Fetch every distinct CAMIS/DBA pair with stable pagination."""
 
@@ -62,8 +57,7 @@ def fetch_restaurant_names() -> list[dict[str, Any]]:
             return records
         offset += PAGE_SIZE
 
-# contained_brand_matches(): This smart function looks at a restaurant's full name and checks if any known fast-food or corporate brand name is hidden inside it (e.g., if a place is called "JFK SUBWAY EXPRESS", it spots "SUBWAY"). 
-# It also prevents shorter, nested names from causing false alarms.
+
 def contains_whole_brand(text: str, brand: str) -> bool:
     """Return True when a complete brand name appears in the text."""
 
@@ -78,9 +72,7 @@ def contained_brand_matches(
     """Find distinct known brands while suppressing nested shorter names."""
 
     matches = {
-        brand
-        for brand in known_brands
-        if contains_whole_brand(normalized_name, brand)
+        brand for brand in known_brands if contains_whole_brand(normalized_name, brand)
     }
 
     # If "SHAHS HALAL FOOD" matches, do not also return "SHAHS HALAL".
@@ -88,8 +80,7 @@ def contained_brand_matches(
         brand
         for brand in matches
         if not any(
-            brand != other and contains_whole_brand(other, brand)
-            for other in matches
+            brand != other and contains_whole_brand(other, brand) for other in matches
         )
     ]
     return tuple(sorted(longest_matches))
@@ -107,30 +98,28 @@ def build_restaurant_table(
         brand for brands in co_brands.values() for brand in brands
     }
     restaurants = pd.DataFrame(records)
-    restaurants["name_syntax_normalized"] = restaurants["dba"].map(
-        normalize_name
-    )
+    restaurants["name_syntax_normalized"] = restaurants["dba"].map(normalize_name)
     restaurants["name_normalized"] = restaurants["dba"].map(
         lambda name: canonicalize_name(name, aliases)
     )
     restaurants["brand_candidates"] = restaurants["dba"].map(
         lambda name: brand_candidates(name, aliases, co_brands)
     )
-    restaurants["detected_known_brands"] = restaurants[
-        "name_syntax_normalized"
-    ].map(lambda name: contained_brand_matches(name, known_brands))
-    restaurants["is_reviewed_co_brand"] = restaurants[
-        "name_syntax_normalized"
-    ].isin(co_brands)
+    restaurants["detected_known_brands"] = restaurants["name_syntax_normalized"].map(
+        lambda name: contained_brand_matches(name, known_brands)
+    )
+    restaurants["is_reviewed_co_brand"] = restaurants["name_syntax_normalized"].isin(
+        co_brands
+    )
     restaurants["has_separator"] = restaurants["dba"].str.contains(
         r"[/&,]|\bAND\b",
         case=False,
         regex=True,
         na=False,
     )
-    restaurants["is_confirmed_fast_food"] = restaurants[
-        "brand_candidates"
-    ].map(lambda values: bool(set(values) & fast_food_brands))
+    restaurants["is_confirmed_fast_food"] = restaurants["brand_candidates"].map(
+        lambda values: bool(set(values) & fast_food_brands)
+    )
     return restaurants
 
 
@@ -143,9 +132,9 @@ def build_co_brand_review(restaurants: pd.DataFrame) -> pd.DataFrame:
         | restaurants["is_reviewed_co_brand"]
     )
     review = restaurants.loc[needs_review].copy()
-    review["detected_known_brands"] = review[
-        "detected_known_brands"
-    ].map(lambda values: " | ".join(values))
+    review["detected_known_brands"] = review["detected_known_brands"].map(
+        lambda values: " | ".join(values)
+    )
     review["brand_candidates"] = review["brand_candidates"].map(
         lambda values: " | ".join(values)
     )
@@ -247,20 +236,11 @@ def build_report(
         ]
     )
 
-# The Master Execution (main())
-# This is where all the data processing and report generation happen:
-# Loading References: Loads your alias rules, co-brand lists, and known fast-food brands.
-# Analyzing the Live Population: Converts the downloaded city records into a Pandas table and runs every single restaurant name through your normalization and brand-detection rules.
-# Building the Review Queues:
-# REVIEW_PATH (co_brand_review_queue.csv): Flags names that contain separators (like &, AND, or /), have multiple known brands smashed together, or are already recognized co-brands, counting how many locations share that name.
-# ALIAS_REVIEW_PATH (brand_alias_review_queue.csv): Captures names that contain a known brand but aren't yet officially classified as fast-food, giving you a clean list to review and potentially add to your alias or override lists later.
-# Generating the Markdown Report (restaurant_name_profile.md): Compiles statistics (like total unique restaurants, confirmed fast-food counts, and review-queue sizes) and writes a summary report.
+
 def main() -> None:
     """Build the live name profile and non-destructive review queue."""
 
-    aliases, co_brands, fast_food_brands = load_name_references(
-        REFERENCE_DIRECTORY
-    )
+    aliases, co_brands, fast_food_brands = load_name_references(REFERENCE_DIRECTORY)
     records = fetch_restaurant_names()
     restaurants = build_restaurant_table(
         records,

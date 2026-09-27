@@ -1,4 +1,9 @@
 # NYC Restaurant Safety & Consumer Intelligence Platform
+
+> **Historical plan:** This file records the original two-week proposal.
+> The completed application uses Next.js and FastAPI instead of Streamlit,
+> contains expanded Airflow workflows, and is documented in the
+> [main README](../../README.md).
 ### 2-Week Build Plan (Fresher DE Portfolio Project) — v2
 
 ---

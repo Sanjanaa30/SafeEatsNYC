@@ -548,10 +548,11 @@ The fixed `latest.json` key avoids creating a new visible audit filename for
 every execution. If S3 bucket versioning is enabled, AWS may still retain older
 object versions for recovery.
 
-## Current freshness status
+## Phase 4 validation snapshot
 
-The current Gold tables fully reconcile with the August 31 Silver snapshot.
-The ingestion audit also contains newer successful Bronze data:
+At the original Phase 4 validation, the Gold tables fully reconciled with the
+August 31 Silver snapshot. The ingestion audit also contained newer successful
+Bronze data:
 
 - 3,441 DOHMH inspection rows from September 5;
 - 1,108 relevant 311 complaint rows from September 5.
@@ -559,13 +560,10 @@ The ingestion audit also contains newer successful Bronze data:
 These rows are not lost. They arrived after the Silver snapshot used by Athena
 and are waiting for the next Silver and Gold refresh.
 
-Until the later full Airflow DAG is implemented, the responsibilities are:
-
-```text
-Airflow daily schedule -> Bronze ingestion only
-Manual Spark command   -> new Silver snapshot
-Manual Athena/dbt run  -> new Gold snapshot
-```
+Phase 6 later connected Bronze, Silver, Athena, dbt, tests, and reconciliation
+in the daily Airflow DAG. The dashboard now reports the latest completed
+warehouse snapshot rather than assuming this historical validation date is
+current.
 
 ## Normal operating commands
 
@@ -605,8 +603,8 @@ commands remain useful while learning or troubleshooting a particular layer.
 - A complaint/restaurant match indicates proximity within 100 metres, not
   proof that the restaurant caused the complaint.
 - Weekly correlation describes association and does not establish causation.
-- The complete Bronze-to-Gold workflow will become automatic only after the
-  full Airflow DAG is implemented.
+- Gold can remain behind Bronze when a daily run is incomplete or fails.
+  Snapshot metadata and reconciliation make that delay visible.
 
 ## Completion checklist
 
@@ -625,4 +623,3 @@ ml_graded_inspections
 - [x] All 119 dbt tests pass.
 - [x] All 19 reconciliation checks pass.
 - [x] Every expected row-count difference is documented.
-

@@ -1,11 +1,7 @@
-"""
-Shared restaurant and brand name normalization rules.
+"""Shared restaurant and brand-name normalization rules.
 
-The CSV files hold reviewed business decisions; punctuation alone is never
-treated as proof that a restaurant is co-branded.
-
-This script acts as the cleaning engine for restaurant names and brand names in your project. 
-It makes sure that messy, differently spelled names (like "McDonald's LLC", "MCD", or "mcdonalds ") are all cleaned up and matched correctly.
+Reviewed CSV files contain business decisions; punctuation alone is never
+treated as evidence that a restaurant is co-branded.
 """
 
 from __future__ import annotations
@@ -16,16 +12,12 @@ import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
-# A rule that looks for corporate endings at the very end of a restaurant name—like LLC, INC, CORP, or LTD—and strips them off so they don't clutter the actual brand name.
-
 LEGAL_SUFFIX_PATTERN = re.compile(
     r"(?:\s*,?\s*\b(?:"
     r"LLC|INC|INCORPORATED|CORP|CORPORATION|LTD|LIMITED"
     r")\b\.?)+\s*$"
 )
 
-# _require_columns(): A safety check. When the script opens your CSV reference files, it checks to make sure the required column headers (like alias_name_normalized) actually exist. 
-# If a column is missing, it crashes safely with a clear error message.
 
 def _require_columns(
     fieldnames: list[str] | None,
@@ -36,9 +28,7 @@ def _require_columns(
 
     missing = required - set(fieldnames or [])
     if missing:
-        raise ValueError(
-            f"{path.name} is missing columns: {sorted(missing)}"
-        )
+        raise ValueError(f"{path.name} is missing columns: {sorted(missing)}")
 
 
 def _read_reference_rows(
@@ -52,31 +42,15 @@ def _read_reference_rows(
         _require_columns(reader.fieldnames, required_columns, path)
         return list(reader)
 
-# normalize_name(name): This is the heavy lifter. It takes any raw restaurant name and turns it into clean, uniform text by doing the following:
-# Converts everything to uppercase.
-# Strips out accents, special characters, and apostrophes (turning "O'Connor" into "OCONNOR").
-# Replaces & signs with the word "AND".
-# Removes store numbers (like #4021).
-# Removes corporate endings (like LLC or INC) only if they are at the end.
-# Replaces all extra spaces and punctuation with single clean spaces and trims the edges.
 
 def normalize_name(name: str) -> str:
-    """Apply deterministic syntax-only normalization to a name.
-    
-    This function cleans up a restaurant or brand name by normalizing Unicode characters,
-    converting to uppercase, removing punctuation like apostrophes, replacing '&' with 'AND',
-    stripping out store identifiers (e.g., #4021), removing legal suffixes (e.g., LLC, INC),
-    and collapsing multiple spaces into a single space. The result is a clean, consistent name
-    that can be reliably matched against other names in the system.
-    """
+    """Return a deterministic, syntax-only form of a restaurant name."""
 
     if not isinstance(name, str):
         raise TypeError("Restaurant and brand names must be strings.")
 
     normalized = unicodedata.normalize("NFKD", name)
-    normalized = (
-        normalized.encode("ascii", errors="ignore").decode("ascii").upper()
-    )
+    normalized = normalized.encode("ascii", errors="ignore").decode("ascii").upper()
     normalized = re.sub(r"['’`]", "", normalized)
     normalized = normalized.replace("&", " AND ")
     # A leading hash is strong evidence of a store identifier. Accept both
@@ -92,7 +66,7 @@ def normalize_name(name: str) -> str:
     normalized = re.sub(r"[^A-Z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
 
-#  load_aliases(): Reads your brand alias CSV file so the script knows how to map alternative names to official brand names (e.g., mapping "MCD" to "MCDONALDS").
+
 def load_aliases(path: Path) -> dict[str, str]:
     """Load reviewed aliases keyed by their normalized source value."""
 
@@ -109,15 +83,13 @@ def load_aliases(path: Path) -> dict[str, str]:
         if not alias or not brand:
             raise ValueError(f"{path.name} contains a blank name.")
         if alias in aliases and aliases[alias] != brand:
-            raise ValueError(
-                f"Conflicting targets for alias {alias!r} in {path.name}."
-            )
+            raise ValueError(f"Conflicting targets for alias {alias!r} in {path.name}.")
 
         aliases[alias] = brand
 
     return aliases
 
-# load_co_brand_associations(): Reads your co-brand file. This ensures that if a single storefront houses two brands together (like a combined Taco Bell and KFC), they don't get accidentally crushed into a single weird name.
+
 def load_co_brand_associations(path: Path) -> dict[str, tuple[str, ...]]:
     """Load reviewed composite-name-to-brand associations."""
 
@@ -167,20 +139,17 @@ def load_name_references(
     co_brands = load_co_brand_associations(
         reference_directory / "co_brand_associations.csv"
     )
-    fast_food_brands = load_brand_registry(
-        reference_directory / "fast_food_brands.csv"
-    )
+    fast_food_brands = load_brand_registry(reference_directory / "fast_food_brands.csv")
     return aliases, co_brands, fast_food_brands
 
-# canonicalize_name(): Cleans a name using normalize_name() and then swaps it for its official alias if one exists.
+
 def canonicalize_name(name: str, aliases: dict[str, str]) -> str:
     """Normalize a name and apply a reviewed whole-name alias."""
 
     normalized = normalize_name(name)
     return aliases.get(normalized, normalized)
 
-# brand_candidates(): Checks if a restaurant name is a known co-brand. 
-# If it is, it returns both brands; otherwise, it returns the single clean brand name.
+
 def brand_candidates(
     name: str,
     aliases: dict[str, str],
@@ -195,8 +164,7 @@ def brand_candidates(
     canonical = aliases.get(normalized, normalized)
     return (canonical,) if canonical else ()
 
-# load_brand_classification_overrides(): Reads a CSV file containing explicit INCLUDE/EXCLUDE decisions for brands derived from OSM data. 
-# This allows for manual review and correction of brand classifications.
+
 def load_brand_classification_overrides(path: Path) -> dict[str, str]:
     """Load explicit INCLUDE/EXCLUDE decisions for the OSM-derived list."""
 
@@ -213,19 +181,15 @@ def load_brand_classification_overrides(path: Path) -> dict[str, str]:
         if not brand:
             raise ValueError(f"{path.name} contains a blank brand.")
         if action not in {"INCLUDE", "EXCLUDE"}:
-            raise ValueError(
-                f"Invalid action {action!r} for {brand!r} in {path.name}."
-            )
+            raise ValueError(f"Invalid action {action!r} for {brand!r} in {path.name}.")
         if brand in overrides and overrides[brand] != action:
-            raise ValueError(
-                f"Conflicting actions for brand {brand!r} in {path.name}."
-            )
+            raise ValueError(f"Conflicting actions for brand {brand!r} in {path.name}.")
 
         overrides[brand] = action
 
     return overrides
 
-# apply_brand_classification_overrides(): Applies the INCLUDE/EXCLUDE decisions to a set of brands, returning a cleaned-up set based on the manual reviews.
+
 def apply_brand_classification_overrides(
     brands: set[str],
     overrides: dict[str, str],
@@ -239,5 +203,3 @@ def apply_brand_classification_overrides(
         else:
             reviewed.discard(brand)
     return reviewed
-
-# this module is designed to be imported by the Phase 1 scripts, not run directly

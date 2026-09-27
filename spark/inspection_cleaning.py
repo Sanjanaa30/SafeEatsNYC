@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from pyspark.sql import DataFrame, functions as F
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 from pyspark.sql.types import (
     ArrayType,
     BooleanType,
@@ -20,7 +21,6 @@ from ingestion.name_normalization import (
     load_name_references,
     normalize_name,
 )
-
 
 TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS"
 NYC_LATITUDE_MIN = 40.45
@@ -68,9 +68,7 @@ def add_name_columns(
     """Apply the exact Phase 1 alias and reviewed co-brand rules."""
 
     reference_directory = reference_directory or default_reference_directory()
-    aliases, co_brands, fast_food_registry = load_name_references(
-        reference_directory
-    )
+    aliases, co_brands, fast_food_registry = load_name_references(reference_directory)
     spark_context = frame.sparkSession.sparkContext
     alias_rules = spark_context.broadcast(aliases)
     co_brand_rules = spark_context.broadcast(co_brands)
@@ -86,9 +84,7 @@ def add_name_columns(
             brand_candidates(name, alias_rules.value, co_brand_rules.value)
         )
         matched_brands = [
-            candidate
-            for candidate in candidates
-            if candidate in fast_food_brands.value
+            candidate for candidate in candidates if candidate in fast_food_brands.value
         ]
         return (
             syntax_normalized,
@@ -153,21 +149,16 @@ def add_address_columns(frame: DataFrame) -> DataFrame:
         )
     )
 
-    street_line = F.concat_ws(
-        " ", F.col("building_clean"), F.col("street_clean")
-    )
+    street_line = F.concat_ws(" ", F.col("building_clean"), F.col("street_clean"))
     street_line = F.when(street_line == "", F.lit(None)).otherwise(street_line)
     state_and_zip = F.when(
         F.col("zipcode").isNotNull(), F.concat(F.lit("NY "), F.col("zipcode"))
     )
 
-    return (
-        cleaned.withColumn(
-            "address_display",
-            F.concat_ws(", ", street_line, F.col("borough"), state_and_zip),
-        )
-        .drop("_zipcode_text")
-    )
+    return cleaned.withColumn(
+        "address_display",
+        F.concat_ws(", ", street_line, F.col("borough"), state_and_zip),
+    ).drop("_zipcode_text")
 
 
 def add_typed_columns(frame: DataFrame) -> DataFrame:
@@ -188,20 +179,20 @@ def add_typed_columns(frame: DataFrame) -> DataFrame:
         .withColumn("_longitude_parsed", F.col("longitude").try_cast("double"))
     )
 
-    typed = (
-        typed.withColumn(
-            "inspection_date_status",
-            F.when(cleaned_text("inspection_date_original").isNull(), "MISSING")
-            .when(F.col("inspection_date").isNull(), "INVALID")
-            .when(F.to_date("inspection_date") == F.lit("1900-01-01"), "UNINSPECTED_PLACEHOLDER")
-            .otherwise("VALID"),
+    typed = typed.withColumn(
+        "inspection_date_status",
+        F.when(cleaned_text("inspection_date_original").isNull(), "MISSING")
+        .when(F.col("inspection_date").isNull(), "INVALID")
+        .when(
+            F.to_date("inspection_date") == F.lit("1900-01-01"),
+            "UNINSPECTED_PLACEHOLDER",
         )
-        .withColumn(
-            "score_status",
-            F.when(cleaned_text("score_original").isNull(), "MISSING")
-            .when(F.col("score").isNull(), "INVALID")
-            .otherwise("VALID"),
-        )
+        .otherwise("VALID"),
+    ).withColumn(
+        "score_status",
+        F.when(cleaned_text("score_original").isNull(), "MISSING")
+        .when(F.col("score").isNull(), "INVALID")
+        .otherwise("VALID"),
     )
 
     latitude_text = cleaned_text("latitude_original")
@@ -211,8 +202,7 @@ def add_typed_columns(frame: DataFrame) -> DataFrame:
         F.when(latitude_text.isNull() & longitude_text.isNull(), "MISSING")
         .when(latitude_text.isNull() | longitude_text.isNull(), "PARTIAL")
         .when(
-            F.col("_latitude_parsed").isNull()
-            | F.col("_longitude_parsed").isNull(),
+            F.col("_latitude_parsed").isNull() | F.col("_longitude_parsed").isNull(),
             "INVALID_FORMAT",
         )
         .when(
@@ -221,12 +211,8 @@ def add_typed_columns(frame: DataFrame) -> DataFrame:
             "OUT_OF_RANGE",
         )
         .when(
-            ~F.col("_latitude_parsed").between(
-                NYC_LATITUDE_MIN, NYC_LATITUDE_MAX
-            )
-            | ~F.col("_longitude_parsed").between(
-                NYC_LONGITUDE_MIN, NYC_LONGITUDE_MAX
-            ),
+            ~F.col("_latitude_parsed").between(NYC_LATITUDE_MIN, NYC_LATITUDE_MAX)
+            | ~F.col("_longitude_parsed").between(NYC_LONGITUDE_MIN, NYC_LONGITUDE_MAX),
             "OUTSIDE_NYC",
         )
         .otherwise("VALID"),

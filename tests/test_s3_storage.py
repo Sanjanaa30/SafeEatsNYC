@@ -1,6 +1,6 @@
 """S3 Bronze storage tests that never contact AWS.
 
-This script tests your S3 storage backend and pipeline integration completely offline without ever touching or connecting to real Amazon Web Services (AWS). 
+This script tests your S3 storage backend and pipeline integration completely offline without ever touching or connecting to real Amazon Web Services (AWS).
 It uses clever mock objects to simulate how S3 behaves.
 """
 
@@ -13,14 +13,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import requests
 from botocore.exceptions import ClientError
 
 from ingestion.pipeline import run_ingestion
 from ingestion.sources import DOHMH_INSPECTIONS
 from ingestion.storage import S3BronzeStorage
 
-# FakeS3Client: A simulated in-memory S3 bucket. It mimics real AWS methods like head_object (checking if a file exists), get_object (reading a file), and put_object (writing a file). 
+
+# FakeS3Client: A simulated in-memory S3 bucket. It mimics real AWS methods like head_object (checking if a file exists), get_object (reading a file), and put_object (writing a file).
 # It even simulates AWS error codes (like 404 for missing files or 412 for conflicting overwrites).
 class FakeS3Client:
     def __init__(self) -> None:
@@ -58,6 +58,7 @@ class FakeS3Client:
         self.objects[location] = bytes(kwargs["Body"])
         return {"ETag": "fake"}
 
+
 # FakeResponse & FakeSession: Fake network response objects that feed pre-determined dummy data to your pipeline instead of calling the live NYC Open Data API.
 class FakeResponse:
     def __init__(self, content: bytes) -> None:
@@ -66,6 +67,7 @@ class FakeResponse:
     def raise_for_status(self) -> None:
         """Raises an exception if the HTTP status code indicates an error."""
         return None
+
 
 # FakeSession: A fake HTTP session object that returns pre-determined responses when the pipeline tries to fetch data from the NYC Open Data API.
 class FakeSession:
@@ -78,10 +80,12 @@ class FakeSession:
     def close(self) -> None:
         return None
 
+
 # Test: S3 storage correctly preserves bytes and refuses overwrites with different content.
 # What it tests:
 # - Verifies that writing to fake S3 correctly applies server-side encryption (AES256), sets unique sha256 metadata tags, and uses conditional writing (IfNoneMatch="*") to prevent duplicates.
 # - Confirms that writing the exact same content twice succeeds quietly, but trying to overwrite a file with different data raises a ValueError.
+
 
 def test_s3_storage_preserves_bytes_and_refuses_different_overwrite() -> None:
     client = FakeS3Client()
@@ -98,8 +102,7 @@ def test_s3_storage_preserves_bytes_and_refuses_different_overwrite() -> None:
     assert storage.exists(relative_key)
     assert storage.read_bytes(relative_key) == b'[{"camis":"1"}]'
     assert storage.uri(relative_key) == (
-        "s3://safeeats-test/bronze/inspections/run_id=test/"
-        "page_offset=000000000.json"
+        "s3://safeeats-test/bronze/inspections/run_id=test/page_offset=000000000.json"
     )
     assert client.put_calls[0]["ServerSideEncryption"] == "AES256"
     assert client.put_calls[0]["IfNoneMatch"] == "*"
@@ -109,10 +112,11 @@ def test_s3_storage_preserves_bytes_and_refuses_different_overwrite() -> None:
     with pytest.raises(ValueError, match="different content"):
         storage.write_bytes(relative_key, b'[{"camis":"2"}]')
 
+
 # Test: The pipeline correctly writes the manifest and exact page to S3.
 # What it tests:
 # - Verifies that the ingestion pipeline correctly writes the manifest file (request.json) and the exact page of data to the fake S3 storage.
-# - Confirms that the manifest contains the correct source name and that the page data is written as expected.  
+# - Confirms that the manifest contains the correct source name and that the page data is written as expected.
 def test_pipeline_writes_manifest_and_exact_page_to_s3(tmp_path: Path) -> None:
     client = FakeS3Client()
     storage = S3BronzeStorage(
@@ -139,10 +143,9 @@ def test_pipeline_writes_manifest_and_exact_page_to_s3(tmp_path: Path) -> None:
 
     assert result.status == "SUCCESS"
     assert result.output_path == (
-        "s3://safeeats-test/bronze/inspections/"
-        "ingest_date=2026-08-03/run_id=s3-run"
+        "s3://safeeats-test/bronze/inspections/ingest_date=2026-08-03/run_id=s3-run"
     )
-    assert json.loads(client.objects[manifest_key])[
-        "source_name"
-    ] == "dohmh_inspections"
+    assert (
+        json.loads(client.objects[manifest_key])["source_name"] == "dohmh_inspections"
+    )
     assert client.objects[page_key] == raw_page

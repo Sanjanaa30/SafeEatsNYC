@@ -1,0 +1,1 @@
+"""SafeEats dashboard API."""

@@ -801,18 +801,18 @@ The dbt CI job intentionally performs `dbt parse`, not production `dbt run` or
 `dbt test`, because GitHub receives no AWS production credentials. Full data
 tests remain part of the Airflow production DAG against the actual Gold data.
 
-## What Phase 6 does not automate
+## Current operational boundaries
 
-- The Streamlit dashboard has not yet been built; that is the next phase.
-- The final XGBoost model retraining and current-risk artifact generation from
-  Phase 5 are not part of the daily DAG yet. The DAG refreshes the dbt feature
-  models, but model promotion remains a deliberate manual process.
+- The user-facing dashboard was built later in Phase 7 with Next.js and
+  FastAPI. It is separate from the Airflow runtime.
+- The daily DAG refreshes data and ML feature tables. Model retraining and
+  promotion run through the separate monthly quality-gated model DAG.
 - Docker Desktop must be running for this local Airflow deployment.
 - AWS login sessions can expire and may require `aws login` again.
 - SQLite audit storage is suitable for one local worker but should move to a
   durable shared database before a multi-machine production deployment.
-- GitHub-hosted CI cannot be confirmed until the workflow is committed and
-  pushed.
+- GitHub-hosted CI intentionally avoids production AWS credentials and does not
+  replace the data tests that run against the real warehouse.
 
 ## Phase 6 completion checklist
 

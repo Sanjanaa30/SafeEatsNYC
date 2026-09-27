@@ -1,0 +1,8 @@
+fastapi==0.135.1
+uvicorn[standard]==0.41.0
+pydantic-settings==2.13.1
+boto3==1.43.56
+botocore[crt]==1.43.56
+httpx==0.28.1
+pytest==9.0.2
+pyarrow==23.0.1

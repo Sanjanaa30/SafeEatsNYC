@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-
 pytest.importorskip("pyspark")
 
-from pyspark.sql import SparkSession, functions as F
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from spark.complaint_cleaning import prepare_complaints
 from spark.complaint_deduplication import deduplicate_complaints
@@ -53,9 +53,7 @@ def test_newest_version_of_each_unique_key_is_kept() -> None:
     try:
         result = {
             row.unique_key: row
-            for row in deduplicate_complaints(
-                prepare_complaints(source)
-            ).collect()
+            for row in deduplicate_complaints(prepare_complaints(source)).collect()
         }
     finally:
         spark.stop()
@@ -63,4 +61,3 @@ def test_newest_version_of_each_unique_key_is_kept() -> None:
     assert set(result) == {"123", "456"}
     assert result["123"].status == "CLOSED"
     assert all(len(row.complaint_record_id) == 64 for row in result.values())
-

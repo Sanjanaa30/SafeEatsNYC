@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from datetime import datetime, timezone
 
 from spark.session import create_spark_session
@@ -15,8 +16,7 @@ def main() -> None:
     silver_prefix = os.getenv("SAFEEATS_SILVER_PREFIX", "silver").strip("/")
     checked_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_path = (
-        f"s3a://{bucket}/{silver_prefix}/_system_checks/"
-        f"spark_runtime_{checked_at}"
+        f"s3a://{bucket}/{silver_prefix}/_system_checks/spark_runtime_{checked_at}"
     )
 
     spark = create_spark_session("safeeats-spark-runtime-check")
@@ -37,11 +37,9 @@ def main() -> None:
         print(f"Rows written and read back: {rows_read_back}")
         print(f"Output: {output_path}")
     finally:
-        try:
+        # The JVM may already be stopped after a Spark error.
+        with suppress(Exception):
             spark.stop()
-        except Exception:
-            # If the JVM has already stopped, preserve the original Spark error.
-            pass
 
 
 if __name__ == "__main__":

@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import argparse
-import gzip
-import io
 import json
 import os
 from datetime import datetime, timezone
 
 import boto3
-import joblib
 import numpy as np
 import pandas as pd
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-from scipy import sparse
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
@@ -29,6 +25,72 @@ from ml.train_logistic_regression import (
     select_risk_thresholds,
 )
 from ml.tune_calibrate_logistic import date_folds
+
+
+def segment_metrics(
+    rows: pd.DataFrame,
+    labels: np.ndarray,
+    probabilities: np.ndarray,
+    moderate: float,
+    high: float,
+) -> dict:
+    """Return honest metrics for one period or subgroup without failing on one class."""
+    result = {
+        "rows": int(len(labels)),
+        "grade_bc_rows": int(labels.sum()),
+        "grade_bc_rate": round(float(labels.mean()), 6) if len(labels) else None,
+        "moderate_or_higher_metrics": classification_metrics(
+            labels, probabilities, moderate
+        ),
+        "high_risk_metrics": classification_metrics(labels, probabilities, high),
+    }
+    if len(np.unique(labels)) == 2:
+        result["roc_auc"] = round(float(roc_auc_score(labels, probabilities)), 6)
+        result["average_precision"] = round(
+            float(average_precision_score(labels, probabilities)), 6
+        )
+        result["brier_score"] = round(float(brier_score_loss(labels, probabilities)), 6)
+    else:
+        result.update({"roc_auc": None, "average_precision": None, "brier_score": None})
+    return result
+
+
+def robustness_checks(
+    rows: pd.DataFrame,
+    labels: np.ndarray,
+    probabilities: np.ndarray,
+    moderate: float,
+    high: float,
+) -> dict:
+    rows = rows.reset_index(drop=True).copy()
+    rows["evaluation_month"] = (
+        rows["target_inspection_date"].dt.to_period("M").astype(str)
+    )
+
+    def grouped(column: str, minimum_rows: int = 30) -> dict:
+        output = {}
+        if column not in rows.columns:
+            return output
+        grouped_rows = rows.assign(_segment=rows[column].fillna("Unknown"))
+        for value, indexes in grouped_rows.groupby("_segment").groups.items():
+            positions = np.asarray(list(indexes), dtype=int)
+            if len(positions) < minimum_rows:
+                continue
+            output[str(value)] = segment_metrics(
+                rows.iloc[positions],
+                labels[positions],
+                probabilities[positions],
+                moderate,
+                high,
+            )
+        return output
+
+    return {
+        "by_month": grouped("evaluation_month"),
+        "by_borough": grouped("borough_name"),
+        "by_cuisine": grouped("cuisine", minimum_rows=75),
+        "note": "Subgroups below the minimum sample size are omitted; these checks diagnose uneven performance and do not tune the model.",
+    }
 
 
 def arguments() -> argparse.Namespace:
@@ -92,7 +154,8 @@ def tune(x, y: np.ndarray, dates: pd.Series) -> tuple[dict, list[dict]]:
             {
                 **candidate,
                 "mean_average_precision": round(
-                    float(np.mean([item["average_precision"] for item in fold_scores])), 6
+                    float(np.mean([item["average_precision"] for item in fold_scores])),
+                    6,
                 ),
                 "mean_roc_auc": round(
                     float(np.mean([item["roc_auc"] for item in fold_scores])), 6
@@ -100,10 +163,16 @@ def tune(x, y: np.ndarray, dates: pd.Series) -> tuple[dict, list[dict]]:
                 "folds": fold_scores,
             }
         )
-    best = max(results, key=lambda item: (item["mean_average_precision"], item["mean_roc_auc"]))
+    best = max(
+        results, key=lambda item: (item["mean_average_precision"], item["mean_roc_auc"])
+    )
     keys = [
-        "n_estimators", "max_depth", "learning_rate", "min_child_weight",
-        "subsample", "colsample_bytree",
+        "n_estimators",
+        "max_depth",
+        "learning_rate",
+        "min_child_weight",
+        "subsample",
+        "colsample_bytree",
     ]
     return {key: best[key] for key in keys}, results
 
@@ -131,16 +200,28 @@ def select_model(logistic: dict, xgboost: dict) -> tuple[str, str]:
     if (
         xgboost_metrics["brier_score"] <= allowed_brier
         and xgboost_metrics["moderate_or_higher_f1"]
-            > logistic_metrics["moderate_or_higher_f1"]
+        > logistic_metrics["moderate_or_higher_f1"]
         and xgboost_metrics["moderate_or_higher_recall"]
-            >= logistic_metrics["moderate_or_higher_recall"]
+        >= logistic_metrics["moderate_or_higher_recall"]
     ):
-        return "xgboost", "Higher Moderate-or-High recall and F1, with stronger precision, ROC-AUC, and calibration."
-    return "logistic_regression", "XGBoost did not improve operational recall and F1 without materially weakening calibration."
+        return (
+            "xgboost",
+            "Higher Moderate-or-High recall and F1, with stronger precision, ROC-AUC, and calibration.",
+        )
+    return (
+        "logistic_regression",
+        "XGBoost did not improve operational recall and F1 without materially weakening calibration.",
+    )
 
 
 def main() -> None:
-    from ml.tune_calibrate_logistic import load_numpy, load_rows, load_sparse, model_bytes, upload
+    from ml.tune_calibrate_logistic import (
+        load_numpy,
+        load_rows,
+        load_sparse,
+        model_bytes,
+        upload,
+    )
 
     load_dotenv()
     selected = arguments()
@@ -192,13 +273,16 @@ def main() -> None:
     )
     base_model = model(best_parameters)
     base_model.fit(x_train[development], y_train[development])
-    calibrated_model = CalibratedClassifierCV(FrozenEstimator(base_model), method="sigmoid")
+    calibrated_model = CalibratedClassifierCV(
+        FrozenEstimator(base_model), method="sigmoid"
+    )
     calibrated_model.fit(x_train[calibration], y_train[calibration])
     threshold_probabilities = calibrated_model.predict_proba(x_train[threshold])[:, 1]
     moderate, high = select_risk_thresholds(y_train[threshold], threshold_probabilities)
 
     mature_x = x_test[mature_test]
     mature_y = y_test[mature_test]
+    mature_rows = test_rows.loc[mature_test].reset_index(drop=True)
     probabilities = calibrated_model.predict_proba(mature_x)[:, 1]
     categories = risk_categories(probabilities, moderate, high)
     calibration_metrics, calibration_bins = calibration_summary(mature_y, probabilities)
@@ -208,7 +292,9 @@ def main() -> None:
         "calibration": {
             "method": "sigmoid",
             "calibrated_brier_score": calibration_metrics["brier_score"],
-            "mean_predicted_probability": calibration_metrics["mean_predicted_probability"],
+            "mean_predicted_probability": calibration_metrics[
+                "mean_predicted_probability"
+            ],
             "observed_grade_bc_rate": calibration_metrics["observed_grade_bc_rate"],
             "log_loss": calibration_metrics["log_loss"],
         },
@@ -216,22 +302,32 @@ def main() -> None:
             "rows": int(len(mature_y)),
             "grade_bc_rows": int(mature_y.sum()),
             "roc_auc": round(float(roc_auc_score(mature_y, probabilities)), 6),
-            "average_precision": round(float(average_precision_score(mature_y, probabilities)), 6),
+            "average_precision": round(
+                float(average_precision_score(mature_y, probabilities)), 6
+            ),
             "high_risk_metrics": classification_metrics(mature_y, probabilities, high),
-            "moderate_or_higher_metrics": classification_metrics(mature_y, probabilities, moderate),
+            "moderate_or_higher_metrics": classification_metrics(
+                mature_y, probabilities, moderate
+            ),
             "risk_tiers": risk_tier_summary(mature_y, categories),
         },
         "risk_thresholds": {
             "moderate_threshold": round(moderate, 6),
             "high_threshold": round(high, 6),
         },
+        "robustness_checks": robustness_checks(
+            mature_rows, mature_y, probabilities, moderate, high
+        ),
     }
     winner, reason = select_model(logistic_report, xgboost_report)
     comparison = {
         "status": "SUCCESS",
         "comparison_run_id": selected.comparison_run_id,
         "completed_at": datetime.now(timezone.utc).isoformat(),
-        "evaluation_period": f"2026-05-01 through {selected.evaluation_end_date}",
+        "evaluation_period": (
+            f"{mature_rows['target_inspection_date'].min().date().isoformat()} through "
+            f"{mature_rows['target_inspection_date'].max().date().isoformat()}"
+        ),
         "selection_rule": "At the actionable Moderate-or-High boundary, require recall not to decrease and prefer higher F1 when Brier calibration is no more than 10% worse; also compare High-tier precision and ROC-AUC.",
         "models": {
             "logistic_regression": metric_view(logistic_report),
@@ -245,20 +341,24 @@ def main() -> None:
     }
     artifacts = {
         "xgboost_model_bundle.joblib": (
-            model_bytes({
-                "model": calibrated_model,
-                "base_model": base_model,
-                "parameters": best_parameters,
-                "moderate_threshold": moderate,
-                "high_threshold": high,
-            }),
+            model_bytes(
+                {
+                    "model": calibrated_model,
+                    "base_model": base_model,
+                    "parameters": best_parameters,
+                    "moderate_threshold": moderate,
+                    "high_threshold": high,
+                }
+            ),
             "application/octet-stream",
         ),
         "xgboost_calibration_bins.csv": (
-            calibration_bins.to_csv(index=False).encode("utf-8"), "text/csv"
+            calibration_bins.to_csv(index=False).encode("utf-8"),
+            "text/csv",
         ),
         "comparison_report.json": (
-            json.dumps(comparison, indent=2).encode("utf-8"), "application/json"
+            json.dumps(comparison, indent=2).encode("utf-8"),
+            "application/json",
         ),
     }
     for name, (body, content_type) in artifacts.items():

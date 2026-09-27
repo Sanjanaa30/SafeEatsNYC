@@ -43,7 +43,9 @@ def parse_arguments() -> argparse.Namespace:
         help="Latest sufficiently mature target date included in final metrics.",
     )
     parser.add_argument("--prepared-prefix", default="ml/prepared")
-    parser.add_argument("--model-prefix", default="ml/models/logistic_regression_calibrated")
+    parser.add_argument(
+        "--model-prefix", default="ml/models/logistic_regression_calibrated"
+    )
     return parser.parse_args()
 
 
@@ -68,13 +70,19 @@ def load_rows(s3, bucket: str, key: str) -> pd.DataFrame:
 
 def date_folds(dates: pd.Series, splits: int = 4):
     unique_dates = np.sort(dates.dt.normalize().unique())
-    for train_dates, validation_dates in TimeSeriesSplit(n_splits=splits).split(unique_dates):
+    for train_dates, validation_dates in TimeSeriesSplit(n_splits=splits).split(
+        unique_dates
+    ):
         train_mask = dates.dt.normalize().isin(unique_dates[train_dates]).to_numpy()
-        validation_mask = dates.dt.normalize().isin(unique_dates[validation_dates]).to_numpy()
+        validation_mask = (
+            dates.dt.normalize().isin(unique_dates[validation_dates]).to_numpy()
+        )
         yield train_mask, validation_mask
 
 
-def tune_logistic_regression(x, y: np.ndarray, dates: pd.Series) -> tuple[dict, list[dict]]:
+def tune_logistic_regression(
+    x, y: np.ndarray, dates: pd.Series
+) -> tuple[dict, list[dict]]:
     candidates = [
         {"C": regularization, "class_weight": class_weight}
         for regularization in [0.01, 0.1, 1.0, 10.0]
@@ -105,7 +113,10 @@ def tune_logistic_regression(x, y: np.ndarray, dates: pd.Series) -> tuple[dict, 
             {
                 **candidate,
                 "mean_average_precision": round(
-                    float(np.mean([score["average_precision"] for score in fold_scores])), 6
+                    float(
+                        np.mean([score["average_precision"] for score in fold_scores])
+                    ),
+                    6,
                 ),
                 "mean_roc_auc": round(
                     float(np.mean([score["roc_auc"] for score in fold_scores])), 6
@@ -113,7 +124,9 @@ def tune_logistic_regression(x, y: np.ndarray, dates: pd.Series) -> tuple[dict, 
                 "folds": fold_scores,
             }
         )
-    best = max(results, key=lambda item: (item["mean_average_precision"], item["mean_roc_auc"]))
+    best = max(
+        results, key=lambda item: (item["mean_average_precision"], item["mean_roc_auc"])
+    )
     return {"C": best["C"], "class_weight": best["class_weight"]}, results
 
 
@@ -133,7 +146,9 @@ def main() -> None:
     bucket = os.environ["SAFEEATS_S3_BUCKET"]
     profile = os.getenv("AWS_PROFILE", "safeeats-dev")
     region = os.getenv("AWS_REGION", "us-east-1")
-    prepared_key = f"{arguments.prepared_prefix.strip('/')}/run_id={arguments.preparation_run_id}"
+    prepared_key = (
+        f"{arguments.prepared_prefix.strip('/')}/run_id={arguments.preparation_run_id}"
+    )
     model_key = f"{arguments.model_prefix.strip('/')}/run_id={arguments.model_run_id}"
     s3 = boto3.Session(profile_name=profile, region_name=region).client("s3")
 
@@ -151,27 +166,47 @@ def main() -> None:
     x_test = load_sparse(s3, bucket, f"{prepared_key}/X_test.npz")
     y_test = load_numpy(s3, bucket, f"{prepared_key}/y_test.npy")
     test_rows = load_rows(s3, bucket, f"{prepared_key}/test_rows.csv.gz")
-    feature_names = json.loads(read_object(s3, bucket, f"{prepared_key}/feature_names.json"))
-    preprocessor = joblib.load(io.BytesIO(read_object(s3, bucket, f"{prepared_key}/preprocessor.joblib")))
+    feature_names = json.loads(
+        read_object(s3, bucket, f"{prepared_key}/feature_names.json")
+    )
+    preprocessor = joblib.load(
+        io.BytesIO(read_object(s3, bucket, f"{prepared_key}/preprocessor.joblib"))
+    )
 
     calibration_start = pd.Timestamp(arguments.calibration_start_date)
     threshold_start = pd.Timestamp(arguments.threshold_start_date)
     evaluation_end = pd.Timestamp(arguments.evaluation_end_date)
-    development_mask = (train_rows["target_inspection_date"] < calibration_start).to_numpy()
+    development_mask = (
+        train_rows["target_inspection_date"] < calibration_start
+    ).to_numpy()
     calibration_mask = (
         (train_rows["target_inspection_date"] >= calibration_start)
         & (train_rows["target_inspection_date"] < threshold_start)
     ).to_numpy()
-    threshold_mask = (train_rows["target_inspection_date"] >= threshold_start).to_numpy()
-    mature_test_mask = (test_rows["target_inspection_date"] <= evaluation_end).to_numpy()
+    threshold_mask = (
+        train_rows["target_inspection_date"] >= threshold_start
+    ).to_numpy()
+    mature_test_mask = (
+        test_rows["target_inspection_date"] <= evaluation_end
+    ).to_numpy()
     immature_test_mask = ~mature_test_mask
-    if not all(mask.any() for mask in [development_mask, calibration_mask, threshold_mask, mature_test_mask]):
+    if not all(
+        mask.any()
+        for mask in [
+            development_mask,
+            calibration_mask,
+            threshold_mask,
+            mature_test_mask,
+        ]
+    ):
         raise ValueError("One temporal model segment is empty.")
 
     best_parameters, tuning_results = tune_logistic_regression(
         x_train[development_mask],
         y_train[development_mask],
-        train_rows.loc[development_mask, "target_inspection_date"].reset_index(drop=True),
+        train_rows.loc[development_mask, "target_inspection_date"].reset_index(
+            drop=True
+        ),
     )
     base_model = LogisticRegression(
         **best_parameters,
@@ -185,7 +220,9 @@ def main() -> None:
     )
     calibrated_model.fit(x_train[calibration_mask], y_train[calibration_mask])
 
-    threshold_probabilities = calibrated_model.predict_proba(x_train[threshold_mask])[:, 1]
+    threshold_probabilities = calibrated_model.predict_proba(x_train[threshold_mask])[
+        :, 1
+    ]
     moderate_threshold, high_threshold = select_risk_thresholds(
         y_train[threshold_mask], threshold_probabilities
     )
@@ -194,8 +231,12 @@ def main() -> None:
     mature_y = y_test[mature_test_mask]
     uncalibrated_probabilities = base_model.predict_proba(mature_x)[:, 1]
     calibrated_probabilities = calibrated_model.predict_proba(mature_x)[:, 1]
-    categories = risk_categories(calibrated_probabilities, moderate_threshold, high_threshold)
-    calibration, calibration_bins = calibration_summary(mature_y, calibrated_probabilities)
+    categories = risk_categories(
+        calibrated_probabilities, moderate_threshold, high_threshold
+    )
+    calibration, calibration_bins = calibration_summary(
+        mature_y, calibrated_probabilities
+    )
 
     all_test_probabilities = calibrated_model.predict_proba(x_test)[:, 1]
     all_test_categories = risk_categories(
@@ -212,7 +253,9 @@ def main() -> None:
         {"feature": feature_names, "coefficient": base_model.coef_[0]}
     )
     coefficient_rows["absolute_coefficient"] = coefficient_rows["coefficient"].abs()
-    coefficient_rows = coefficient_rows.sort_values("absolute_coefficient", ascending=False)
+    coefficient_rows = coefficient_rows.sort_values(
+        "absolute_coefficient", ascending=False
+    )
 
     report = {
         "status": "SUCCESS",
@@ -221,7 +264,7 @@ def main() -> None:
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "label_maturation": {
             "evaluation_end_date": evaluation_end.date().isoformat(),
-            "reason": "August 2026 grades were immature in the August 31 Silver snapshot.",
+            "reason": "Outcomes after the maturity cutoff are excluded so recent incomplete grades do not distort evaluation.",
             "mature_test_rows": int(mature_test_mask.sum()),
             "immature_rows_excluded_from_metrics": int(immature_test_mask.sum()),
             "immature_grade_bc_rows": int(y_test[immature_test_mask].sum()),
@@ -266,7 +309,9 @@ def main() -> None:
             "rows": int(len(mature_y)),
             "grade_bc_rows": int(mature_y.sum()),
             "grade_bc_rate": round(float(mature_y.mean()), 6),
-            "roc_auc": round(float(roc_auc_score(mature_y, calibrated_probabilities)), 6),
+            "roc_auc": round(
+                float(roc_auc_score(mature_y, calibrated_probabilities)), 6
+            ),
             "average_precision": round(
                 float(average_precision_score(mature_y, calibrated_probabilities)), 6
             ),
